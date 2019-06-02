@@ -4,7 +4,7 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<name>USB Copier</name>
 	<description>USB drive copier based on Raspberry Pi Zero</description>
-	<groupId>none</groupId>
+	<groupId>usb-copier</groupId>
 	<artifactId>usb-copier</artifactId>
 	<version>0.0.1</version>
 	<modelVersion>4.0.0</modelVersion>
