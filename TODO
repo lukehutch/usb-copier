@@ -1,0 +1,22 @@
+
+- Add Hanja chars to font
+- Make all drives mount in sync mode
+
+- Add setup notes:
+  - [N/A?] Add user "pi" to "disk" group so that they can manually mount and unmount and format disks without needing to type a password.
+    (without this, disks end up getting owned by root when they get mounted using sudo):
+    sudo usermod -a -G disk pi
+  - Enable I2C and set data rate to 1Mbaud in config file
+  - Disable graphical startup, and any unnecessary services
+  - Add systemd task to start program
+  
+Write the following ( see https://github.com/RPi-Distro/repo/issues/137 ) to /etc/polkit-1/localauthority/90-mandatory.d/91-udisks2.pkla :
+
+[udisks2]
+Identity=unix-group:adm
+Action=org.freedesktop.udisks2.*
+ResultAny=yes
+ResultInactive=yes
+ResultActive=yes
+
+TODO: or just run the program as root?
