@@ -57,7 +57,7 @@
 	</build>
 	<dependencies>
 		<dependency>
-			<groupId>lukehutch</groupId>
+			<groupId>adafruit-oled-bonnet-toolkit</groupId>
 			<artifactId>adafruit-oled-bonnet-toolkit</artifactId>
 			<version>0.0.1</version>
 		</dependency>
