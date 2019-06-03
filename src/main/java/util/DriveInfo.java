@@ -48,8 +48,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import aobtk.util.Command;
-import aobtk.util.TaskExecutor;
 import aobtk.util.Command.CommandException;
+import aobtk.util.TaskExecutor;
 import aobtk.util.TaskExecutor.TaskResult;
 import main.Main;
 
@@ -243,19 +243,27 @@ public class DriveInfo implements Comparable<DriveInfo> {
     private static final long _1G = 1024L * _1M;
     private static final String UNK = "??";
 
-    public String getUsedInHumanUnits(boolean showTotSize) {
-        long _used = getUsed();
-        if (size == 0) {
+    private static String getInHumanUnits(long numer, long denom, boolean showDenom) {
+        if (denom == 0) {
             return "0";
-        } else if (size < _1k) {
-            return (isMounted() ? _used : UNK) + (showTotSize ? "/" + size : "") + "B";
-        } else if (size < _1M) {
-            return (isMounted() ? decFrac(_used, _1k) : UNK) + (showTotSize ? "/" + decFrac(size, _1k) : "") + "kB";
-        } else if (size < _1G) {
-            return (isMounted() ? decFrac(_used, _1M) : UNK) + (showTotSize ? "/" + decFrac(size, _1M) : "") + "MB";
+        } else if (denom < _1k) {
+            return (numer >= 0 ? numer : UNK) + (showDenom ? "/" + denom : "") + "B";
+        } else if (denom < _1M) {
+            return (numer >= 0 ? decFrac(numer, _1k) : UNK) + (showDenom ? "/" + decFrac(denom, _1k) : "") + "kB";
+        } else if (denom < _1G) {
+            return (numer >= 0 ? decFrac(numer, _1M) : UNK) + (showDenom ? "/" + decFrac(denom, _1M) : "") + "MB";
         } else {
-            return (isMounted() ? decFrac(_used, _1G) : UNK) + (showTotSize ? "/" + decFrac(size, _1G) : "") + "MB";
+            return (numer >= 0 ? decFrac(numer, _1G) : UNK) + (showDenom ? "/" + decFrac(denom, _1G) : "") + "MB";
         }
+    }
+
+    public String getUsedInHumanUnits(boolean showTotSize) {
+        return getInHumanUnits(Math.min(getUsed(), size), size, showTotSize);
+    }
+
+    public String getFreeInHumanUnits(boolean showTotSize) {
+        long used = getUsed();
+        return getInHumanUnits(used < 0 ? -1L : Math.max(0L, size - used), size, showTotSize);
     }
 
     public String toStringShort() {

@@ -34,9 +34,10 @@ package screen;
 import java.util.List;
 
 import aobtk.font.Font;
+import aobtk.font.FontStyle;
+import aobtk.font.FontStyle.Highlight;
 import aobtk.hw.HWButton;
 import aobtk.i18n.Str;
-import aobtk.oled.Display.Highlight;
 import aobtk.ui.element.Menu;
 import aobtk.ui.element.TextElement;
 import aobtk.ui.element.VLayout;
@@ -65,18 +66,17 @@ public class WipeScreen extends DrivesChangedListenerScreen {
 
         // Add drive info at top
         layout.addSpace(1, VAlign.TOP);
-        layout.add(new TextElement(Font.FONT_5X8, selectedDrive.toStringShort()), VAlign.TOP);
+        layout.add(new TextElement(Font.PiOLED_5x8().newStyle(), selectedDrive.toStringShort()), VAlign.TOP);
 
         // "Wipe Method:"
-        layout.add(new TextElement(Font.FONT_NEODGM, WIPE_METHOD), VAlign.TOP);
+        layout.add(new TextElement(Font.NeoDGM_16().newStyle(), WIPE_METHOD), VAlign.TOP);
         layout.addSpace(1, VAlign.TOP);
         // "Quick" / "Secure"
-        wipeMenu = new Menu(Font.FONT_NEODGM, 4, /* hLayout = */ true, QUICK, SECURE);
+        wipeMenu = new Menu(Font.NeoDGM_16().newStyle(), 4, /* hLayout = */ true, QUICK, SECURE);
         layout.add(wipeMenu, VAlign.TOP);
 
         // Add "ERASE ALL?" warning text at bottom, initially hidden
-        warningText = new TextElement(Font.FONT_NEODGM, ERASE_ALL_WARNING);
-        warningText.setHighlight(Highlight.HALO);
+        warningText = new TextElement(Font.NeoDGM_16().newStyle().setHighlight(FontStyle.Highlight.HALO), ERASE_ALL_WARNING);
         warningText.hide(true);
         layout.add(warningText, VAlign.BOTTOM);
 

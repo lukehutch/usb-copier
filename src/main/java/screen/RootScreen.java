@@ -64,16 +64,17 @@ public class RootScreen extends DrivesChangedListenerScreen {
 
         // Add drives menu
         layout.addSpace(1, VAlign.TOP);
-        driveMenu = new Menu(Font.FONT_5X8, 2, /* hLayout = */ false, new Str[0]);
+        driveMenu = new Menu(Font.PiOLED_5x8().newStyle(), 2, /* hLayout = */ false, new Str[0]);
         layout.add(driveMenu, VAlign.TOP);
 
         // Add "Insert USB Drives" text (hidden by default)
-        noDrivesText = new TextElement(Font.FONT_NEODGM, NO_DRIVES);
+        noDrivesText = new TextElement(Font.NeoDGM_16().newStyle(), NO_DRIVES);
         noDrivesText.hide(true);
         layout.add(noDrivesText, VAlign.CENTER);
 
-        actionMenu = new Menu(Font.FONT_NEODGM, 4, /* hLayout = */ true, new Str[0]);
+        actionMenu = new Menu(Font.NeoDGM_16().newStyle(), 4, /* hLayout = */ true, new Str[0]);
         layout.add(actionMenu, VAlign.BOTTOM);
+        layout.addSpace(1, VAlign.BOTTOM);
 
         setUI(layout);
     }
@@ -203,7 +204,7 @@ public class RootScreen extends DrivesChangedListenerScreen {
     public void buttonDown(HWButton button) {
         if (button == HWButton.B && HWButton.buttonDown(HWButton.A)) {
             // Hold A then press B to switch languages
-            Str.switchLanguages();
+            Str.lang = (Str.lang + 1) % 2;
         } else {
             // Otherwise handle single button presses
             if (button == HWButton.L) {

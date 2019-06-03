@@ -32,7 +32,6 @@
 package main;
 
 import aobtk.hw.Bonnet;
-import aobtk.hw.HWButton;
 import aobtk.ui.screen.Screen;
 import screen.RootScreen;
 import util.DiskMonitor;

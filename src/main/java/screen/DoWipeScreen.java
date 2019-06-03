@@ -67,7 +67,7 @@ public class DoWipeScreen extends Screen {
 
     private void exceptionThrown(Exception e) {
         e.printStackTrace();
-        setUI(new VLayout(new TextElement(Font.FONT_NEODGM, ERROR)));
+        setUI(new VLayout(new TextElement(Font.NeoDGM_16().newStyle(), ERROR)));
         waitThenGoToParentScreen(3000);
 
         // Try remounting drive, if it is unmounted
@@ -131,7 +131,7 @@ public class DoWipeScreen extends Screen {
         this.isQuick = isQuick;
 
         VLayout layout = new VLayout();
-        layout.add(new TextElement(Font.FONT_NEODGM, ERASING(selectedDrive.port).toString()));
+        layout.add(new TextElement(Font.NeoDGM_16().newStyle(), ERASING(selectedDrive.port).toString()));
         layout.addSpace(4);
         layout.add(progressBar = new ProgressBar(OLEDDriver.DISPLAY_WIDTH * 8 / 10, 10));
         setUI(layout);
@@ -246,7 +246,7 @@ public class DoWipeScreen extends Screen {
 
             if (!canceled) {
                 // Show completed status
-                setUI(new VLayout(new TextElement(Font.FONT_NEODGM, COMPLETED)));
+                setUI(new VLayout(new TextElement(Font.NeoDGM_16().newStyle(), COMPLETED)));
                 waitThenGoToParentScreen(2000);
             } else {
                 // "Canceled" was already shown, and there was already a time delay during the mkfs call,
@@ -276,7 +276,7 @@ public class DoWipeScreen extends Screen {
                 // Prevent double attempt to cancel
                 ddCommandTask = null;
                 // Show canceled text
-                setUI(new VLayout(new TextElement(Font.FONT_NEODGM, CANCELED)));
+                setUI(new VLayout(new TextElement(Font.NeoDGM_16().newStyle(), CANCELED)));
                 // Go back to parent
                 // (N.B. WIPE_EXECUTOR will still be trying to run mkfs, sync, and mount
                 // in the background, to get the drive back to a legible state)

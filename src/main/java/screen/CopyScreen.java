@@ -40,7 +40,7 @@ import java.util.concurrent.ExecutionException;
 import aobtk.font.Font;
 import aobtk.hw.HWButton;
 import aobtk.i18n.Str;
-import aobtk.ui.element.HLayout;
+import aobtk.ui.element.TableLayout;
 import aobtk.ui.element.TextElement;
 import aobtk.ui.element.VLayout;
 import aobtk.ui.element.VLayout.VAlign;
@@ -52,8 +52,6 @@ import util.DriveInfo;
 import util.FileInfo;
 
 public class CopyScreen extends DrivesChangedListenerScreen {
-    private HLayout otherDriveListOuterBox;
-    private VLayout otherDriveList;
     private TextElement start;
 
     private final DriveInfo selectedDrive;
@@ -66,6 +64,10 @@ public class CopyScreen extends DrivesChangedListenerScreen {
     private static final Str NEED_2_DRIVES = new Str("Insert other USB", "USB 2개 필요하다");
     private static final Str WIPEQ0 = new Str("Wipe", "먼저");
     private static final Str WIPEQ1 = new Str("first?", "지울까?");
+    private static final Str SRC = new Str("Src", "원본");
+    private static final Str DEST = new Str("Dest", "대상");
+    private static final Str FREE = new Str("Free", "여유");
+    private static final Str WIPE = new Str("Wipe", "지울까");
 
     public CopyScreen(Screen parentScreen, DriveInfo selectedDrive) {
         super(parentScreen);
@@ -73,7 +75,7 @@ public class CopyScreen extends DrivesChangedListenerScreen {
         this.selectedDrive = selectedDrive;
 
         // Initial status line to display while recursively reading files
-        setUI(new VLayout(new TextElement(Font.FONT_NEODGM,
+        setUI(new VLayout(new TextElement(Font.NeoDGM_16().newStyle(),
                 new Str("Reading #" + selectedDrive.port + "⠤", "#" + selectedDrive.port + "를 읽고있다⠤"))));
     }
 
@@ -115,7 +117,7 @@ public class CopyScreen extends DrivesChangedListenerScreen {
                 if (mountResultCode != 0) {
                     // Disk was not successfully mounted
                     System.out.println("Could not mount disk " + selectedDrive.partitionDevice);
-                    setUI(new VLayout(new TextElement(Font.FONT_NEODGM, ERROR)));
+                    setUI(new VLayout(new TextElement(Font.NeoDGM_16().newStyle(), ERROR)));
                     waitThenGoToParentScreen(3000);
                     throw new IllegalArgumentException("Failed to mount drive");
                 }
@@ -126,54 +128,46 @@ public class CopyScreen extends DrivesChangedListenerScreen {
 
             if (fileList.isEmpty()) {
                 // Nothing to copy
-                setUI(new VLayout(new TextElement(Font.FONT_NEODGM,
+                setUI(new VLayout(new TextElement(Font.NeoDGM_16().newStyle(),
                         new Str("#" + selectedDrive.port + " is empty", "#" + selectedDrive.port + "는 비다"))));
                 waitThenGoToParentScreen(2000);
                 return null;
             }
 
-            VLayout layout = new VLayout();
-
-            layout.add(new TextElement(Font.FONT_NEODGM,
-                    new Str("#" + selectedDrive.port + ": " + fileList.size() + " files",
-                            "#" + selectedDrive.port + ": " + "파일 " + fileList.size() + "개")),
-                    VAlign.TOP);
-
-            // Two or more drives are needed
             int numOtherDrives = driveInfoList.size() - (driveInfoList.contains(selectedDrive) ? 1 : 0);
             if (numOtherDrives < 1) {
-                // There are no other drives plugged in
-                TextElement needTwoDrives = new TextElement(Font.FONT_NEODGM, NEED_2_DRIVES);
-                layout.add(needTwoDrives, VAlign.CENTER);
-                setUI(layout);
+                // Two or more drives need to be plugged in
+                setUI(new VLayout(new TextElement(Font.NeoDGM_16().newStyle(), NEED_2_DRIVES)));
                 return null;
             }
 
-            // Show drive list
-            otherDriveListOuterBox = new HLayout();
-            otherDriveListOuterBox.add(new VLayout(new TextElement(Font.FONT_NEODGM, WIPEQ0),
-                    new TextElement(Font.FONT_NEODGM, WIPEQ1)));
-            otherDriveList = new VLayout();
-            otherDriveListOuterBox.add(otherDriveList);
-            layout.add(otherDriveListOuterBox, VAlign.CENTER);
+            VLayout layout = new VLayout();
 
-            // If there's at least one other drive, populate the list
-            otherDriveList.clear();
-            if (numOtherDrives >= 1) {
-                for (DriveInfo di : driveInfoList) {
-                    if (!di.equals(selectedDrive)) {
-                        otherDriveList.add(new TextElement(Font.FONT_NEODGM,
-                                "#" + di.port + " " + di.getUsedInHumanUnits(/* showTotSize = */ false) + " "
-                                        + (mountPointsToWipe.contains(di.mountPoint) ? "*" : "-")));
+            layout.add(
+                    new TextElement(Font.NeoDGM_16().newStyle(),
+                            new Str("Src:#" + selectedDrive.port + ", " + fileList.size() + " files",
+                                    " 원본:#" + selectedDrive.port + "," + "파일 " + fileList.size() + "개")),
+                    VAlign.TOP);
 
-                        // TODO: finish this
-                    }
+            TableLayout driveTable = new TableLayout(4, 1);
+            driveTable.add(0, new TextElement(Font.NeoDGM_16().newStyle(), DEST),
+                    new TextElement(Font.NeoDGM_16().newStyle(), FREE),
+                    new TextElement(Font.NeoDGM_16().newStyle(), WIPE));
+            int row = 1;
+            for (DriveInfo di : driveInfoList) {
+                if (!di.equals(selectedDrive)) {
+                    driveTable.add(row, new TextElement(Font.PiOLED_5x8().newStyle(), "#" + di.port),
+                            new TextElement(Font.PiOLED_5x8().newStyle(), di.getFreeInHumanUnits(/* showTotSize = */ false)),
+                            new TextElement(Font.PiOLED_5x8().newStyle(), mountPointsToWipe.contains(di.mountPoint) ? "*" : "-"));
+
+                    row++;
                 }
             }
+            layout.add(driveTable, VAlign.TOP);
 
             // Add button to start copying
             layout.add(
-                    start = new TextElement(Font.FONT_NEODGM,
+                    start = new TextElement(Font.NeoDGM_16().newStyle(),
                             new Str("Copy from #" + selectedDrive.port, "#" + selectedDrive.port + "에서 복사 시작")),
                     VAlign.BOTTOM);
 

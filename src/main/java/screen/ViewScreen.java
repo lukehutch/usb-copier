@@ -35,11 +35,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 import aobtk.font.Font;
+import aobtk.font.FontStyle;
+import aobtk.font.FontStyle.Highlight;
 import aobtk.hw.HWButton;
 import aobtk.i18n.Str;
 import aobtk.oled.Display;
 import aobtk.oled.OLEDDriver;
-import aobtk.oled.Display.Highlight;
 import aobtk.ui.element.FullscreenUIElement;
 import aobtk.ui.screen.Screen;
 import aobtk.util.Command;
@@ -54,8 +55,10 @@ public class ViewScreen extends DrivesChangedListenerScreen {
     private volatile int viewLineIdx = 0;
 
     private volatile int viewX = 0;
-    private static final int VIEW_X_STEP = Font.FONT_NEODGM.getOuterWidth(' ') * 4;
-    private static final int NUM_SCREEN_ROWS = OLEDDriver.DISPLAY_HEIGHT / Font.FONT_NEODGM.getOuterHeight();
+    private static final FontStyle FONT_STYLE = Font.WenQuanYi_16().newStyle();
+    private static final FontStyle HEADER_STYLE = FONT_STYLE.copy().setHighlight(Highlight.BLOCK);
+    private static final int VIEW_X_STEP = FONT_STYLE.getFont().getMaxCharWidth() * 4;
+    private static final int NUM_SCREEN_ROWS = OLEDDriver.DISPLAY_HEIGHT / FONT_STYLE.getFont().getMaxCharHeight();
 
     private TaskResult<Void> fileListingTask;
 
@@ -79,9 +82,8 @@ public class ViewScreen extends DrivesChangedListenerScreen {
                     int lineIdx = currViewLineIdx + i;
                     String line = lineIdx >= 0 && lineIdx < currLines.size() ? currLines.get(lineIdx) : "";
                     boolean isHeaderLine = lineIdx == 0;
-                    y += Font.FONT_NEODGM.drawString(line, currViewX + (isHeaderLine ? 1 : 0), y, true,
-                            // Highlight first line
-                            isHeaderLine ? Highlight.BLOCK : Highlight.NONE, display).h;
+                    y += (isHeaderLine ? HEADER_STYLE : FONT_STYLE).drawString(line,
+                            currViewX + (isHeaderLine ? 1 : 0), y, display).h;
                 }
             }
         });
@@ -97,6 +99,7 @@ public class ViewScreen extends DrivesChangedListenerScreen {
         repaint();
     }
 
+    @Override
     public void drivesChanged(List<DriveInfo> driveInfoList) {
         // Look for drive in list that has the same partition device as the selected drive
         // (can't use equals() because that checks the mount point, and the drive might
