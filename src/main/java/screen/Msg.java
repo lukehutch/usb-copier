@@ -69,6 +69,6 @@ public class Msg {
     static final Str ERASING = new Str("Erasing #$0", "#$0를 지우는 중");
     static final Str NO_DRIVES = new Str("Insert USB Drive", "USB를 넣으십시오");
 
-    static final Str NUM_FILES = new Str("#$@: $1 files", "#$@: 파일 $1개");
+    static final Str NUM_FILES = new Str("#$0: $1 files", "#$0: 파일 $1개");
     static final Str CANT_READ_PORT = new Str("Can't read #$0", "#$0를 읽을 수 없다");
 }
