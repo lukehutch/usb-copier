@@ -165,7 +165,9 @@ public class DriveInfo implements Comparable<DriveInfo> {
                 // If the drive is not mounted, df will return zero -- try to mount the drive first
                 if (mountPoint.isEmpty()) {
                     try {
-                        Command.command("sudo udisksctl -b " + partitionDevice);
+                        Command.command("sudo udisksctl mount -b " + partitionDevice);
+                        // Generate drives changed event
+                        Main.diskMonitor.drivesChanged();
                     } catch (CommandException | InterruptedException | CancellationException e) {
                         System.out.println("Could not mount " + partitionDevice);
                         e.printStackTrace();

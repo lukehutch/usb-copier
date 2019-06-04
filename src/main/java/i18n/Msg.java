@@ -48,7 +48,7 @@ public class Msg {
             "插入另一个USB");
 
     public static final Str FREE = new Str("Free", "여유", "空间");
-    public static final Str NEEDED = new Str("Needed", "부족", "不足");
+    public static final Str NEEDED = new Str("Short", "부족", "不足");
 
     public static final Str ERROR = new Str("Error", "오류", "发生错误");
     public static final Str CANCELED = new Str("Canceled", "취소 되었다", "取消了");

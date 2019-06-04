@@ -135,7 +135,11 @@ public class CopyScreen extends DrivesChangedListenerScreen {
             int row = 1;
             List<DriveInfo> _otherDrives = new ArrayList<>();
             for (DriveInfo di : driveInfoList) {
-                if (!di.equals(selectedDrive) && di.isMounted()) {
+                if (!di.isMounted()) {
+                    // Drive is not mounted -- an easy way to asynchronously mount it is to
+                    // fetch the used capacity
+                    di.getUsed();
+                } else if (!di.equals(selectedDrive)) {
                     long diFree = di.getFree();
                     long insufficientSpace = Math.max(0, selectedDriveUsed - diFree);
                     String insufficientSpaceStr = insufficientSpace == 0L ? "--"
