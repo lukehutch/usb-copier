@@ -33,6 +33,7 @@ package screen;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
@@ -108,13 +109,14 @@ public class DoCopyScreen extends Screen {
             // files, assuming the destination drives have approximately the same write speed.
             taskExecutors[i] = new TaskExecutor();
             try {
-                TaskResult<Integer> commandResult = Command.commandWithConsumer("rsync -rlpt --info=progress2 "
+                TaskResult<Integer> commandResult = Command.commandWithConsumer("rsync -rlptv --info=progress2 "
                         // End source dir in "/" to copy contents of dir, not dir itself
                         + selectedDrive.mountPoint + "/ " //
                         + otherDrive.mountPoint, //
                         taskExecutors[i], /* consumeStderr = */ false, progressLine -> {
+                            System.out.println("GOT: " + progressLine);
                             // Get progress percentage for rsync transfer
-                            if (progressLine.contains("xfr#") && progressLine.contains("to-chk=")) {
+                            try {
                                 StringTokenizer tok = new StringTokenizer(progressLine);
                                 tok.nextToken();
                                 String percentage = tok.nextToken();
@@ -122,12 +124,15 @@ public class DoCopyScreen extends Screen {
                                     try {
                                         int percentageInt = Integer
                                                 .parseInt(percentage.substring(0, percentage.length() - 1));
-                                        // Update progress bar with rsync progress percentage
-                                        progressBar.setProgress(percentageInt, 100);
-                                        repaint();
+                                        if (percentageInt >= 0 && percentageInt <= 100) {
+                                            // Update progress bar with rsync progress percentage
+                                            progressBar.setProgress(percentageInt, 100);
+                                            repaint();
+                                        }
                                     } catch (NumberFormatException e) {
                                     }
                                 }
+                            } catch (NoSuchElementException e) {
                             }
                         });
                 rsyncTaskResults.add(commandResult);

@@ -41,6 +41,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
@@ -165,19 +166,26 @@ public class DriveInfo implements Comparable<DriveInfo> {
                 List<String> lines = Command.command("sudo df " + partitionDevice);
                 if (lines.size() == 2) {
                     String line = lines.get(1);
+                    boolean gotResult = false;
                     if (line.startsWith(partitionDevice + " ") || line.startsWith(partitionDevice + "\t")) {
-                        StringTokenizer tok = new StringTokenizer(line);
-                        tok.nextToken();
-                        tok.nextToken();
-                        String usedTok = tok.nextToken();
+                        try {
+                            StringTokenizer tok = new StringTokenizer(line);
+                            tok.nextToken();
+                            tok.nextToken();
+                            String usedTok = tok.nextToken();
 
-                        // Cache value to avoid running df again
-                        long usedVal = Long.parseLong(usedTok) * 1024L;
-                        Main.diskMonitor.setUsed(partitionDevice, usedVal);
+                            // Cache value to avoid running df again
+                            long usedVal = Long.parseLong(usedTok) * 1024L;
+                            Main.diskMonitor.setUsed(partitionDevice, usedVal);
 
-                        // Generate drives changed event
-                        Main.diskMonitor.drivesChanged();
-                    } else {
+                            // Generate drives changed event
+                            Main.diskMonitor.drivesChanged();
+
+                            gotResult = true;
+                        } catch (NoSuchElementException e) {
+                        }
+                    }
+                    if (!gotResult) {
                         // For some reason "sudo df /dev/sda1" returns a line for devtmpfs, if the drive
                         // is still being mounted
                         System.out.println("Got wrong drive info back from df: expected " + partitionDevice
@@ -274,9 +282,9 @@ public class DriveInfo implements Comparable<DriveInfo> {
             return (numer >= 0 ? decFrac(numer, _1G) : UNK) + (showDenom ? "/" + decFrac(denom, _1G) : "") + "GB";
         }
     }
-    
+
     public static void main(String[] args) {
-        System.out.println(getInHumanUnits(4294967295L, 32*1024*1024*1024L, false));
+        System.out.println(getInHumanUnits(4294967295L, 32 * 1024 * 1024 * 1024L, false));
     }
 
     public String getUsedInHumanUnits(boolean showTotSize) {
@@ -289,8 +297,6 @@ public class DriveInfo implements Comparable<DriveInfo> {
     }
 
     public String toStringShort() {
-        System.out.println("#" + port + " -> " + getUsed()); //@@
-        
         return "#" + port + " : " + getUsedInHumanUnits(true);
     }
 

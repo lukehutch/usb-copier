@@ -34,18 +34,18 @@ package i18n;
 import aobtk.i18n.Str;
 
 public class Msg {
-    
+
     public static final Str COPY = new Str("Copy", "복사", "复制");
     public static final Str VIEW = new Str("View", "보기", "查看");
     public static final Str WIPE = new Str("Wipe", "지우기", "擦拭");
-
 
     public static final Str WIPE_METHOD = new Str("Wipe Method:", "지우는 방법:", "擦拭方法");
     public static final Str QUICK = new Str("Quick", "빨리", "快速地");
     public static final Str SECURE = new Str("Secure", "안전하게", "安全地");
     public static final Str ERASE_ALL_WARNING = new Str("ERASE ALL?", "모두 다 지울까?", "擦拭一切吗?");
 
-    public static final Str NEED_2_DRIVES = new Str("Insert another\nUSB drive", "USB 드라이브를\n하나 더 넣으십시오", "插入另一个USB");
+    public static final Str NEED_2_DRIVES = new Str("Insert another\nUSB drive", "USB 드라이브를\n하나 더 넣으십시오",
+            "插入另一个USB");
 
     public static final Str FREE = new Str("Free", "여유", "空间");
     public static final Str NEEDED = new Str("Needed", "부족", "不足");
@@ -59,7 +59,7 @@ public class Msg {
 
     public static final Str READING = new Str("Reading #$0", "#$0 를 읽고있다", "从 #$0 读取");
     public static final Str EMPTY = new Str("#$0 is empty", "#$0 는 비다", "#$0 是空的");
-    
+
     public static final Str START_COPYING = new Str("Start copy from #$0", "#$0 에서 복사 시작", "从 #$0 开始复制");
     public static final Str COPYING = new Str("Copying from #$0", "#$0 에서 복사중", "从 #$0 复制中");
 
