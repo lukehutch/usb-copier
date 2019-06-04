@@ -31,13 +31,12 @@
  */
 package screen;
 
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 
 import aobtk.font.Font;
+import aobtk.font.FontStyle.Highlight;
 import aobtk.hw.HWButton;
 import aobtk.i18n.Str;
 import aobtk.ui.element.TableLayout;
@@ -48,18 +47,17 @@ import aobtk.ui.screen.Screen;
 import aobtk.util.Command;
 import aobtk.util.Command.CommandException;
 import aobtk.util.TaskExecutor.TaskResult;
+import i18n.Msg;
 import main.Main;
 import util.DriveInfo;
 import util.FileInfo;
 
 public class CopyScreen extends DrivesChangedListenerScreen {
-    private TextElement start;
-
     private final DriveInfo selectedDrive;
-    private final Set<String> mountPointsToWipe = Collections
-            .newSetFromMap(new ConcurrentHashMap<String, Boolean>());
+    private volatile List<DriveInfo> otherDrives;
+    private volatile int numFiles;
 
-    private TaskResult<Void> fileListingTask;
+    private TaskResult<Void> setupTask;
 
     public CopyScreen(Screen parentScreen, DriveInfo selectedDrive) {
         super(parentScreen);
@@ -67,8 +65,7 @@ public class CopyScreen extends DrivesChangedListenerScreen {
         this.selectedDrive = selectedDrive;
 
         // Initial status line to display while recursively reading files
-        setUI(new VLayout(
-                new TextElement(Main.FONT.newStyle(), new Str(Msg.READING, selectedDrive.port))));
+        setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(), new Str(Msg.READING, selectedDrive.port))));
     }
 
     @Override
@@ -89,19 +86,19 @@ public class CopyScreen extends DrivesChangedListenerScreen {
             return;
         }
 
-        if (fileListingTask != null) {
+        if (setupTask != null) {
             // Still working on previous task -- cancel it
-            fileListingTask.cancel();
+            setupTask.cancel();
         }
 
-        fileListingTask = taskExecutor.submit(() -> {
+        setupTask = taskExecutor.submit(() -> {
             // Check if drive is mounted, and if not, mount it
             if (!selectedDrive.isMounted()) {
                 int mountResultCode;
                 try {
                     mountResultCode = Command.commandWithConsumer(
                             "sudo udisksctl mount --no-user-interaction -b " + selectedDrive.partitionDevice,
-                            System.out::println, /* consumeStdErr = */ true).get();
+                            /* consumeStdErr = */ true, System.out::println).get();
                 } catch (CommandException | ExecutionException e) {
                     e.printStackTrace();
                     mountResultCode = 1;
@@ -109,7 +106,7 @@ public class CopyScreen extends DrivesChangedListenerScreen {
                 if (mountResultCode != 0) {
                     // Disk was not successfully mounted
                     System.out.println("Could not mount disk " + selectedDrive.partitionDevice);
-                    setUI(new VLayout(new TextElement(Main.FONT.newStyle(), Msg.ERROR)));
+                    setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(), Msg.ERROR)));
                     waitThenGoToParentScreen(3000);
                     throw new IllegalArgumentException("Failed to mount drive");
                 }
@@ -117,48 +114,57 @@ public class CopyScreen extends DrivesChangedListenerScreen {
 
             // Start the file listing task for the drive, and block on the result 
             List<FileInfo> fileList = selectedDrive.getFileListTask().get();
+            numFiles = fileList.size();
 
-            if (fileList.isEmpty()) {
-                // Nothing to copy
+            if (!selectedDrive.isMounted() || fileList.isEmpty()) {
+                // Nothing to copy -- tell user drive is empty
                 setUI(new VLayout(
-                        new TextElement(Main.FONT.newStyle(), new Str(Msg.EMPTY, selectedDrive.port))));
+                        new TextElement(Main.UI_FONT.newStyle(), new Str(Msg.EMPTY, selectedDrive.port))));
                 waitThenGoToParentScreen(2000);
                 return null;
             }
 
-            int numOtherDrives = driveInfoList.size() - (driveInfoList.contains(selectedDrive) ? 1 : 0);
-            if (numOtherDrives < 1) {
-                // Two or more drives need to be plugged in
-                setUI(new VLayout(new TextElement(Main.FONT.newStyle(), Msg.NEED_2_DRIVES)));
-                return null;
-            }
+            // Get space used on selected drive
+            long selectedDriveUsed = selectedDrive.getUsed();
 
-            VLayout layout = new VLayout();
-
-            layout.add(new TextElement(Main.FONT.newStyle(),
-                    new Str(Msg.NUM_FILES, selectedDrive.port, fileList.size())), VAlign.TOP);
-
-            TableLayout driveTable = new TableLayout(4, 1);
-            driveTable.add(0, new TextElement(Main.FONT.newStyle(), Msg.DEST),
-                    new TextElement(Main.FONT.newStyle(), Msg.FREE),
-                    new TextElement(Main.FONT.newStyle(), Msg.WIPEQ));
+            /// Set up drive list table
+            TableLayout driveTable = new TableLayout(8, 2);
+            driveTable.add(0, new TextElement(Main.UI_FONT.newStyle(), Msg.DEST),
+                    new TextElement(Main.UI_FONT.newStyle(), Msg.FREE),
+                    new TextElement(Main.UI_FONT.newStyle(), Msg.NEEDED));
             int row = 1;
+            List<DriveInfo> _otherDrives = new ArrayList<>();
             for (DriveInfo di : driveInfoList) {
-                if (!di.equals(selectedDrive)) {
+                if (!di.equals(selectedDrive) && di.isMounted()) {
+                    long diFree = di.getFree();
+                    long insufficientSpace = Math.max(0, selectedDriveUsed - diFree);
+                    String insufficientSpaceStr = insufficientSpace == 0L ? "--"
+                            : DriveInfo.getInHumanUnits(insufficientSpace);
                     driveTable.add(row, new TextElement(Font.PiOLED_5x8().newStyle(), "#" + di.port),
                             new TextElement(Font.PiOLED_5x8().newStyle(),
                                     di.getFreeInHumanUnits(/* showTotSize = */ false)),
-                            new TextElement(Font.PiOLED_5x8().newStyle(),
-                                    mountPointsToWipe.contains(di.mountPoint) ? "*" : "-"));
-
+                            new TextElement(Font.PiOLED_5x8().newStyle(), insufficientSpaceStr));
+                    _otherDrives.add(di);
                     row++;
                 }
             }
+            this.otherDrives = _otherDrives;
+
+            // Must have at least one other drive mounted to copy to 
+            if (_otherDrives.size() < 1) {
+                // Tell user at least one more drive needs to be plugged in
+                setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(), Msg.NEED_2_DRIVES)));
+                return null;
+            }
+
+            // Create drive list UI
+            VLayout layout = new VLayout();
             layout.add(driveTable, VAlign.TOP);
 
-            // Add button to start copying
-            layout.add(start = new TextElement(Main.FONT.newStyle(),
-                    new Str(Msg.COPY_FROM, selectedDrive.port)), VAlign.BOTTOM);
+            // Add "button" at bottom indicating that button B will start copying
+            layout.add(new TextElement(Main.UI_FONT.newStyle().setHighlight(Highlight.BLOCK),
+                    new Str(Msg.START_COPYING, selectedDrive.port)), VAlign.BOTTOM);
+            layout.addSpace(1, VAlign.BOTTOM);
 
             setUI(layout);
             return null;
@@ -174,27 +180,24 @@ public class CopyScreen extends DrivesChangedListenerScreen {
     public void buttonDown(HWButton button) {
         if (button == HWButton.A) {
             // Cancel file listing operation, if it hasn't finished yet
-            fileListingTask.cancel();
+            if (selectedDrive != null) {
+                TaskResult<List<FileInfo>> getFileListTask = selectedDrive.getFileListTask();
+                if (getFileListTask != null) {
+                    getFileListTask.cancel();
+                }
+            }
+            if (setupTask != null) {
+                setupTask.cancel();
+            }
 
             // Move up to parent screen
             goToParentScreen();
 
-        } else if (fileListingTask.isDone()) {
-            //            // Handle directional buttons only if file listing operation is finished
-            //            if (button == HWButton.U && viewLineIdx > 0) {
-            //                viewLineIdx--;
-            //            } else if (button == HWButton.D && viewLineIdx < dispLines.size() - NUM_DISP_ROWS) {
-            //                viewLineIdx++;
-            //            } else if (button == HWButton.L && viewX < 0) {
-            //                viewX += VIEW_X_STEP;
-            //            } else if (button == HWButton.R) {
-            //                viewX -= VIEW_X_STEP;
-            //            }
-
-            // TODO: before starting copying, set isCopying to true
-            // TODO: start copying when button pressed
-            // TODO: run sync() after copying has finished
-
+        } else if (button == HWButton.B && setupTask.isDone()) {
+            List<DriveInfo> _otherDrives = this.otherDrives;
+            if (otherDrives != null && !otherDrives.isEmpty()) {
+                setCurrScreen(new DoCopyScreen(parentScreen, selectedDrive, numFiles, _otherDrives));
+            }
         }
     }
 }

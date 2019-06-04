@@ -44,6 +44,7 @@ import aobtk.ui.screen.Screen;
 import aobtk.util.Command;
 import aobtk.util.Command.CommandException;
 import aobtk.util.TaskExecutor.TaskResult;
+import i18n.Msg;
 import main.Main;
 import util.DriveInfo;
 
@@ -59,7 +60,7 @@ public class DoWipeScreen extends Screen {
 
     private void exceptionThrown(Exception e) {
         e.printStackTrace();
-        setUI(new VLayout(new TextElement(Main.FONT.newStyle(), Msg.ERROR)));
+        setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(), Msg.ERROR)));
         waitThenGoToParentScreen(3000);
 
         // Try remounting drive, if it is unmounted
@@ -96,7 +97,7 @@ public class DoWipeScreen extends Screen {
 
     private TaskResult<Integer> ddWipe(DriveInfo selectedDrive) throws CommandException {
         return Command.commandWithConsumer(
-                "sudo dd if=/dev/zero of=" + selectedDrive.partitionDevice + " bs=4096 status=progress", line -> {
+                "sudo dd if=/dev/zero of=" + selectedDrive.partitionDevice + " bs=4096 status=progress", /* consumeStderr = */ true, line -> {
                     if (!line.isEmpty() && !line.contains("records in")) {
                         // Show progress percentage
                         int spaceIdx = line.indexOf(' ');
@@ -108,7 +109,7 @@ public class DoWipeScreen extends Screen {
                         progressBar.setProgress(percent, 100);
                         repaint();
                     }
-                }, /* consumeStderr = */ true);
+                });
     }
 
     public DoWipeScreen(Screen parentScreen, DriveInfo selectedDrive, boolean isQuick) {
@@ -123,7 +124,7 @@ public class DoWipeScreen extends Screen {
         this.isQuick = isQuick;
 
         VLayout layout = new VLayout();
-        layout.add(new TextElement(Main.FONT.newStyle(), new Str(Msg.ERASING, selectedDrive.port)));
+        layout.add(new TextElement(Main.UI_FONT.newStyle(), new Str(Msg.ERASING, selectedDrive.port)));
         layout.addSpace(4);
         layout.add(progressBar = new ProgressBar(OLEDDriver.DISPLAY_WIDTH * 8 / 10, 10));
         setUI(layout);
@@ -231,14 +232,14 @@ public class DoWipeScreen extends Screen {
             progressBar.setProgress(100, 100);
             repaint();
             try {
-                Thread.sleep(100);
+                Thread.sleep(200);
             } catch (InterruptedException e10) {
                 canceled = true;
             }
 
             if (!canceled) {
                 // Show completed status
-                setUI(new VLayout(new TextElement(Main.FONT.newStyle(), Msg.COMPLETED)));
+                setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(), Msg.COMPLETED)));
                 waitThenGoToParentScreen(2000);
             } else {
                 // "Canceled" was already shown, and there was already a time delay during the mkfs call,
@@ -268,7 +269,7 @@ public class DoWipeScreen extends Screen {
                 // Prevent double attempt to cancel
                 ddCommandTask = null;
                 // Show canceled text
-                setUI(new VLayout(new TextElement(Main.FONT.newStyle(), Msg.CANCELED)));
+                setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(), Msg.CANCELED)));
                 // Go back to parent
                 // (N.B. WIPE_EXECUTOR will still be trying to run mkfs, sync, and mount
                 // in the background, to get the drive back to a legible state)

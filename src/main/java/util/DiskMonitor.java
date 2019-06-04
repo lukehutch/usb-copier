@@ -85,8 +85,8 @@ public class DiskMonitor {
             // plugging or unplugging a drive, and calling "udiskctl dump". (Run it in a separate executor since it
             // will run until the program terminates.)
             UDisksCtlParser monitorParser = new UDisksCtlParser(this, partitionDeviceToDriveInfo);
-            monitorJob = Command.commandWithConsumer("sudo udisksctl monitor", monitorParser,
-                    /* consumeStderr = */ false, monitoringExecutor);
+            monitorJob = Command.commandWithConsumer("sudo udisksctl monitor", monitoringExecutor,
+                    /* consumeStderr = */ false, monitorParser);
 
             // Next call "udisksctl dump" once to get the initial list of plugged-in drives.
             try {
@@ -126,7 +126,11 @@ public class DiskMonitor {
     }
 
     void setUsed(String partitionDevice, long used) {
-        partitionDeviceToUsed.put(partitionDevice, used);
+        if (used == -1L) {
+            partitionDeviceToUsed.remove(partitionDevice);
+        } else {
+            partitionDeviceToUsed.put(partitionDevice, used);
+        }
     }
 
     /** Notify listeners that a change in drives has been detected. */

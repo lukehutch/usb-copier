@@ -196,6 +196,10 @@ public class DriveInfo implements Comparable<DriveInfo> {
         return -1L;
     }
 
+    public long getFree() {
+        return Math.max(0, size - getUsed());
+    }
+
     public boolean isMounted() {
         return !mountPoint.isEmpty() && getUsed() >= 0L;
     }
@@ -209,8 +213,8 @@ public class DriveInfo implements Comparable<DriveInfo> {
                 }
             }
         }
-        // Mark size as unknown
-        size = -1L;
+        // Mark used as unknown
+        Main.diskMonitor.setUsed(partitionDevice, -1L);
     }
 
     protected void transferCacheFrom(DriveInfo oldDriveInfo) {
@@ -243,9 +247,23 @@ public class DriveInfo implements Comparable<DriveInfo> {
     private static final long _1G = 1024L * _1M;
     private static final String UNK = "??";
 
+    public static String getInHumanUnits(long size) {
+        if (size == 0) {
+            return "0B";
+        } else if (size < _1k) {
+            return size + "B";
+        } else if (size < _1M) {
+            return decFrac(size, _1k) + "kB";
+        } else if (size < _1G) {
+            return decFrac(size, _1M) + "MB";
+        } else {
+            return decFrac(size, _1G) + "GB";
+        }
+    }
+
     private static String getInHumanUnits(long numer, long denom, boolean showDenom) {
         if (denom == 0) {
-            return "0";
+            return "0B";
         } else if (denom < _1k) {
             return (numer >= 0 ? numer : UNK) + (showDenom ? "/" + denom : "") + "B";
         } else if (denom < _1M) {
@@ -253,8 +271,12 @@ public class DriveInfo implements Comparable<DriveInfo> {
         } else if (denom < _1G) {
             return (numer >= 0 ? decFrac(numer, _1M) : UNK) + (showDenom ? "/" + decFrac(denom, _1M) : "") + "MB";
         } else {
-            return (numer >= 0 ? decFrac(numer, _1G) : UNK) + (showDenom ? "/" + decFrac(denom, _1G) : "") + "MB";
+            return (numer >= 0 ? decFrac(numer, _1G) : UNK) + (showDenom ? "/" + decFrac(denom, _1G) : "") + "GB";
         }
+    }
+    
+    public static void main(String[] args) {
+        System.out.println(getInHumanUnits(4294967295L, 32*1024*1024*1024L, false));
     }
 
     public String getUsedInHumanUnits(boolean showTotSize) {
@@ -267,6 +289,8 @@ public class DriveInfo implements Comparable<DriveInfo> {
     }
 
     public String toStringShort() {
+        System.out.println("#" + port + " -> " + getUsed()); //@@
+        
         return "#" + port + " : " + getUsedInHumanUnits(true);
     }
 

@@ -40,10 +40,14 @@ import util.DiskMonitor;
 public class Main {
 
     public static DiskMonitor diskMonitor;
-    
-    // Main font should have Latin1, CJK ideograph, and Hangeul support
-    // (choices: Font.WQY_Song_16(), Font.GNU_Unifont_16, Font.WQY_Unibit_16)
-    public static Font FONT = Font.WQY_Song_16();
+
+    // Font for filenames that may include Korean / Chinese chars.
+    // Needs to be a font with Latin1, CJK ideograph, and Hangeul support.
+    // Choices: Font.WQY_Song_16(), Font.GNU_Unifont_16, Font.WQY_Unibit_16
+    public static volatile Font CJK = Font.WQY_Song_16();
+
+    // Main UI font
+    public static volatile Font UI_FONT = Font.WQY_Song_16();
 
     public static void main(String[] args) throws Exception {
         // Start drive listener

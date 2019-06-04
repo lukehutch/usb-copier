@@ -31,6 +31,7 @@
  */
 package screen;
 
+import aobtk.font.Font;
 import aobtk.hw.HWButton;
 import aobtk.i18n.Str;
 import aobtk.ui.element.Menu;
@@ -50,8 +51,9 @@ public class ChooseLangScreen extends Screen {
     public void open() {
         VLayout layout = new VLayout();
 
-        langMenu = new Menu(Main.FONT.newStyle(), 2, /* hLayout = */ false, "English", "조선말", "中文");
+        langMenu = new Menu(Font.GNU_Unifont_16().newStyle(), 2, /* hLayout = */ false, "English", "조선말", "中文");
         layout.add(langMenu, VAlign.CENTER);
+        langMenu.setSelectedIdx(1);
 
         setUI(layout);
     }
@@ -67,6 +69,14 @@ public class ChooseLangScreen extends Screen {
         } else if ((button == HWButton.B || button == HWButton.C)) {
             // Select the language, and move to RootScreen
             Str.lang = langMenu.getSelectedIdx();
+            if (Str.lang == 1) {
+                // Switch to NeoDGM for Korean
+                // Main.UI_FONT = Font.NeoDGM_16();
+            } else if (Str.lang == 2) {
+                // Chinese needs a little more space
+                Main.UI_FONT.getDefaultStyle().setPadX(2);
+                Main.UI_FONT.getDefaultStyle().setPadY(2);
+            }
             setCurrScreen(new RootScreen());
         }
     }

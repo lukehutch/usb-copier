@@ -44,6 +44,7 @@ import aobtk.ui.element.FullscreenUIElement;
 import aobtk.ui.screen.Screen;
 import aobtk.util.Command;
 import aobtk.util.TaskExecutor.TaskResult;
+import i18n.Msg;
 import main.Main;
 import util.DriveInfo;
 import util.FileInfo;
@@ -55,7 +56,7 @@ public class ViewScreen extends DrivesChangedListenerScreen {
     private volatile int viewLineIdx = 0;
 
     private volatile int viewX = 0;
-    private static final FontStyle FONT_STYLE = Main.FONT.newStyle();
+    private static final FontStyle FONT_STYLE = Main.CJK.newStyle();
     private static final FontStyle HEADER_STYLE = FONT_STYLE.copy().setHighlight(Highlight.BLOCK);
     private static final int VIEW_X_STEP = FONT_STYLE.getFont().getMaxCharWidth() * 4;
     private static final int NUM_SCREEN_ROWS = OLEDDriver.DISPLAY_HEIGHT / FONT_STYLE.getFont().getMaxCharHeight();
@@ -129,7 +130,7 @@ public class ViewScreen extends DrivesChangedListenerScreen {
                     if (!driveInfo.isMounted()) {
                         TaskResult<Integer> mountResultCode = Command.commandWithConsumer(
                                 "sudo udisksctl mount --no-user-interaction -b " + selectedDrive.partitionDevice,
-                                System.out::println, /* consumeStdErr = */ true);
+                                /* consumeStdErr = */ true, System.out::println);
                         if (mountResultCode.get() != 0) {
                             // Disk was not successfully mounted
                             System.out.println("Could not mount disk " + selectedDrive.partitionDevice);
@@ -183,9 +184,9 @@ public class ViewScreen extends DrivesChangedListenerScreen {
         } else if (fileListingTask != null && fileListingTask.isDone()) {
             // Handle directional buttons only if file listing operation is finished
             if (button == HWButton.U && viewLineIdx > 0) {
-                viewLineIdx--;
-            } else if (button == HWButton.D && viewLineIdx < textLines.size() - NUM_SCREEN_ROWS) {
-                viewLineIdx++;
+                viewLineIdx -= NUM_SCREEN_ROWS;
+            } else if (button == HWButton.D && viewLineIdx + NUM_SCREEN_ROWS < textLines.size()) {
+                viewLineIdx += NUM_SCREEN_ROWS;
             } else if (button == HWButton.L && viewX < 0) {
                 viewX += VIEW_X_STEP;
             } else if (button == HWButton.R) {

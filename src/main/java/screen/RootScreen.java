@@ -41,6 +41,7 @@ import aobtk.ui.element.Menu;
 import aobtk.ui.element.TextElement;
 import aobtk.ui.element.VLayout;
 import aobtk.ui.element.VLayout.VAlign;
+import i18n.Msg;
 import main.Main;
 import util.DriveInfo;
 
@@ -64,11 +65,11 @@ public class RootScreen extends DrivesChangedListenerScreen {
         layout.add(driveMenu, VAlign.TOP);
 
         // Add "Insert USB Drives" text (hidden by default)
-        noDrivesText = new TextElement(Main.FONT.newStyle(), Msg.NO_DRIVES);
+        noDrivesText = new TextElement(Main.UI_FONT.newStyle(), Msg.NO_DRIVES);
         noDrivesText.hide(true);
         layout.add(noDrivesText, VAlign.CENTER);
 
-        actionMenu = new Menu(Main.FONT.newStyle(), 4, /* hLayout = */ true, new Str[0]);
+        actionMenu = new Menu(Main.UI_FONT.newStyle(), 6, /* hLayout = */ true, new Str[0]);
         layout.add(actionMenu, VAlign.BOTTOM);
         layout.addSpace(1, VAlign.BOTTOM);
 

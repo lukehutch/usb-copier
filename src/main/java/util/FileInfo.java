@@ -50,9 +50,6 @@ public class FileInfo implements Comparable<FileInfo> {
 
     @Override
     public String toString() {
-        String sizeStr = size < 1024 ? size + "B"
-                : size < 1024 * 1024 ? (size + 1024 - 1) / 1024 + "MB"
-                        : (size + 1024 * 1024 - 1) / (1024 * 1024) + "GB";
-        return path + " (" + sizeStr + ")";
+        return path + (size < 0 ? "" : " (" + DriveInfo.getInHumanUnits(size) + ")");
     }
 }
