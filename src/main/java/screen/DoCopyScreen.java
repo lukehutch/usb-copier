@@ -114,7 +114,6 @@ public class DoCopyScreen extends Screen {
                         + selectedDrive.mountPoint + "/ " //
                         + otherDrive.mountPoint, //
                         taskExecutors[i], /* consumeStderr = */ false, progressLine -> {
-                            System.out.println("GOT: " + progressLine);
                             // Get progress percentage for rsync transfer
                             try {
                                 StringTokenizer tok = new StringTokenizer(progressLine);

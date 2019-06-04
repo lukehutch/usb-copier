@@ -162,6 +162,16 @@ public class DriveInfo implements Comparable<DriveInfo> {
         // If there's not a df job already scheduled for this drive
         dfExecutor.submit(() -> {
             try {
+                // If the drive is not mounted, df will return zero -- try to mount the drive first
+                if (mountPoint.isEmpty()) {
+                    try {
+                        Command.command("sudo udisksctl -b " + partitionDevice);
+                    } catch (CommandException | InterruptedException | CancellationException e) {
+                        System.out.println("Could not mount " + partitionDevice);
+                        e.printStackTrace();
+                    }
+                }
+
                 // Get the number of used kB on the partition using df
                 List<String> lines = Command.command("sudo df " + partitionDevice);
                 if (lines.size() == 2) {
@@ -186,10 +196,11 @@ public class DriveInfo implements Comparable<DriveInfo> {
                         }
                     }
                     if (!gotResult) {
-                        // For some reason "sudo df /dev/sda1" returns a line for devtmpfs, if the drive
+                        // For some reason "sudo df /dev/sda1" returns a line for devtmpfs if the drive
                         // is still being mounted
                         System.out.println("Got wrong drive info back from df: expected " + partitionDevice
                                 + ", got: " + line);
+
                         // Try again after a couple of seconds
                         Thread.sleep(2000);
                         dfExecutor.submit(() -> getUsed());

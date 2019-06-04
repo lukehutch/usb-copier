@@ -50,11 +50,15 @@ public class Main {
     public static volatile Font UI_FONT = Font.WQY_Song_16();
 
     public static void main(String[] args) throws Exception {
-        // Start drive listener
-        diskMonitor = new DiskMonitor();
-
         // Initialize the Button class, and register the GPIO event listeners
         Bonnet.init();
+
+        // Start by immediately displaying a "Please Wait" screen
+        // (it takes time to load the fonts, start the disk monitor, etc.)
+        Bonnet.display.setFromBitBuffer(SavePleaseWaitScreen.getSavedBitBuffer());
+        
+        // Start drive listener
+        diskMonitor = new DiskMonitor();
 
         // Initialize root screen
         Screen.init(new ChooseLangScreen());
@@ -76,7 +80,7 @@ public class Main {
                 // You can also kill the program by interrupting the main thread
                 // (not currently used)
                 System.out.println("Main thread was interrupted -- shutting down");
-                System.exit(1);
+                Bonnet.shutdown();
             }
         }
     }
