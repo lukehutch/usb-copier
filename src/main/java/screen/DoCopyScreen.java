@@ -76,13 +76,13 @@ public class DoCopyScreen extends Screen {
 
         layout.add(new TextElement(Main.UI_FONT.newStyle(), new Str(Msg.COPYING, selectedDrive.port)),
                 VAlign.CENTER);
-        layout.addSpace(2, VAlign.CENTER);
+        layout.addSpace(1, VAlign.CENTER);
         layout.add(new TextElement(Main.UI_FONT.newStyle(), new Str(Msg.FILE_COUNT, numFiles)), VAlign.CENTER);
-        layout.addSpace(4, VAlign.CENTER);
+        layout.addSpace(2, VAlign.CENTER);
 
         // Create table of progress bars
         progressBars = new ArrayList<>(otherDrives.size());
-        TableLayout driveTable = new TableLayout(4, 2);
+        TableLayout driveTable = new TableLayout(2, 1);
         for (DriveInfo otherDrive : otherDrives) {
             ProgressBar progressBar = new ProgressBar(OLEDDriver.DISPLAY_WIDTH * 8 / 10, 10);
             progressBars.add(progressBar);

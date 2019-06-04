@@ -60,7 +60,7 @@ public class Msg {
     public static final Str READING = new Str("Reading #$0", "#$0 를 읽고있다", "从 #$0 读取");
     public static final Str EMPTY = new Str("#$0 is empty", "#$0 는 비다", "#$0 是空的");
 
-    public static final Str START_COPYING = new Str("Start copy from #$0", "#$0 에서 복사 시작", "从 #$0 开始复制");
+    public static final Str START_COPYING = new Str("Copy from #$0", "#$0 에서 복사 시작", "从 #$0 开始复制");
     public static final Str COPYING = new Str("Copying from #$0", "#$0 에서 복사중", "从 #$0 复制中");
 
     public static final Str ERASING = new Str("Erasing #$0", "#$0 를 지우는 중", "正在擦除 #$0");
