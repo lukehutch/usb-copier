@@ -29,46 +29,45 @@
  * AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
  * OR OTHER DEALINGS IN THE SOFTWARE.
  */
-package main;
+package screen;
 
-import aobtk.hw.Bonnet;
+import aobtk.font.Font;
+import aobtk.hw.HWButton;
+import aobtk.i18n.Str;
+import aobtk.ui.element.Menu;
+import aobtk.ui.element.VLayout;
+import aobtk.ui.element.VLayout.VAlign;
 import aobtk.ui.screen.Screen;
-import screen.ChooseLangScreen;
-import util.DiskMonitor;
 
-public class Main {
+public class ChooseLangScreen extends Screen {
+    private volatile Menu langMenu;
 
-    public static DiskMonitor diskMonitor;
+    public ChooseLangScreen() {
+        super(/* parentScreen = */ null);
+    }
 
-    public static void main(String[] args) throws Exception {
-        // Start drive listener
-        diskMonitor = new DiskMonitor();
+    @Override
+    public void open() {
+        VLayout layout = new VLayout();
 
-        // Initialize the Button class, and register the GPIO event listeners
-        Bonnet.init();
+        langMenu = new Menu(Font.GNU_Unifont_16().newStyle(), 2, /* hLayout = */ false, "English", "조선말", "中文");
+        layout.add(langMenu, VAlign.CENTER);
 
-        // Initialize root screen
-        Screen.init(new ChooseLangScreen());
+        setUI(layout);
+    }
 
-        // Perform clean shutdown on Ctrl-C
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                // Stop monitoring for changes in plugged drives
-                diskMonitor.shutdown();
-            }
-        });
-
-        // Keep program running until termination
-        for (;;) {
-            try {
-                Thread.sleep(1000_000);
-            } catch (InterruptedException e) {
-                // You can also kill the program by interrupting the main thread
-                // (not currently used)
-                System.out.println("Main thread was interrupted -- shutting down");
-                System.exit(1);
-            }
+    @Override
+    public void buttonDown(HWButton button) {
+        if (button == HWButton.U) {
+            // Left
+            langMenu.decSelectedIdx();
+        } else if (button == HWButton.D) {
+            // Right
+            langMenu.incSelectedIdx();
+        } else if ((button == HWButton.B || button == HWButton.C)) {
+            // Select the language, and move to RootScreen
+            Str.lang = langMenu.getSelectedIdx();
+            setCurrScreen(new RootScreen());
         }
     }
 }

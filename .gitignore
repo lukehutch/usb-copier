@@ -1,4 +1,9 @@
-target/
-.settings/
-.DS_Store
-Thumbs.db
+*.class
+*.jar
+hs_err_pid*
+
+target/*
+/target/
+
+dependency-reduced-pom.xml
+

@@ -52,11 +52,6 @@ public class RootScreen extends DrivesChangedListenerScreen {
     private volatile TextElement noDrivesText;
     private volatile Menu actionMenu;
 
-    private static final Str NO_DRIVES = new Str("Insert USB Drive", "USB를 넣으십시오");
-    private static final Str COPY = new Str("Copy", "복사");
-    private static final Str VIEW = new Str("View", "보기");
-    private static final Str WIPE = new Str("Wipe", "지우기");
-
     public RootScreen() {
         super(/* parentScreen = */ null);
 
@@ -68,11 +63,11 @@ public class RootScreen extends DrivesChangedListenerScreen {
         layout.add(driveMenu, VAlign.TOP);
 
         // Add "Insert USB Drives" text (hidden by default)
-        noDrivesText = new TextElement(Font.NeoDGM_16().newStyle(), NO_DRIVES);
+        noDrivesText = new TextElement(Font.GNU_Unifont_16().newStyle(), Msg.NO_DRIVES);
         noDrivesText.hide(true);
         layout.add(noDrivesText, VAlign.CENTER);
 
-        actionMenu = new Menu(Font.NeoDGM_16().newStyle(), 4, /* hLayout = */ true, new Str[0]);
+        actionMenu = new Menu(Font.GNU_Unifont_16().newStyle(), 4, /* hLayout = */ true, new Str[0]);
         layout.add(actionMenu, VAlign.BOTTOM);
         layout.addSpace(1, VAlign.BOTTOM);
 
@@ -115,19 +110,19 @@ public class RootScreen extends DrivesChangedListenerScreen {
                 }
 
                 // Only add Copy item to action menu if there are at least two drives plugged in
-                
+
                 Str prevSelectedAction = actionMenu.getSelectedItem();
                 actionMenu.clear();
                 if (drivesList.size() > 1) {
-                    actionMenu.add(COPY);
+                    actionMenu.add(Msg.COPY);
                 }
-                actionMenu.add(VIEW);
-                if (prevSelectedAction == VIEW) {
-                    actionMenu.setSelectedItem(VIEW);
+                actionMenu.add(Msg.VIEW);
+                if (prevSelectedAction == Msg.VIEW) {
+                    actionMenu.setSelectedItem(Msg.VIEW);
                 }
-                actionMenu.add(WIPE);
-                if (prevSelectedAction == WIPE) {
-                    actionMenu.setSelectedItem(WIPE);
+                actionMenu.add(Msg.WIPE);
+                if (prevSelectedAction == Msg.WIPE) {
+                    actionMenu.setSelectedItem(Msg.WIPE);
                 }
 
                 // Hide "Insert USB Drive", and show action menu
@@ -194,42 +189,30 @@ public class RootScreen extends DrivesChangedListenerScreen {
     }
 
     @Override
-    public boolean acceptsButtonA() {
-        // Accept button A -- can't go up to parent, since this is the toplevel screen.
-        // A + B can then be used to switch languages.
-        return true;
-    }
-
-    @Override
     public void buttonDown(HWButton button) {
-        if (button == HWButton.B && HWButton.buttonDown(HWButton.A)) {
-            // Hold A then press B to switch languages
-            Str.lang = (Str.lang + 1) % 2;
-        } else {
-            // Otherwise handle single button presses
-            if (button == HWButton.L) {
-                // Left
-                actionMenu.decSelectedIdx();
-            } else if (button == HWButton.R) {
-                // Right
-                actionMenu.incSelectedIdx();
-            } else if ((button == HWButton.B || button == HWButton.C) && selectedDrive != null) {
-                // Either B or C work for select
-                Str action = actionMenu.getSelectedItem();
-                if (action == COPY) {
-                    setCurrScreen(new CopyScreen(this, selectedDrive));
-                } else if (action == VIEW) {
-                    setCurrScreen(new ViewScreen(this, selectedDrive));
-                } else if (action == WIPE) {
-                    setCurrScreen(new WipeScreen(this, selectedDrive));
-                }
-            } else if (button == HWButton.U) {
-                // Up
-                selectNextOrPrevDrive(/* next = */ false);
-            } else if (button == HWButton.D) {
-                // Down
-                selectNextOrPrevDrive(/* next = */ true);
+        // Otherwise handle single button presses
+        if (button == HWButton.L) {
+            // Left
+            actionMenu.decSelectedIdx();
+        } else if (button == HWButton.R) {
+            // Right
+            actionMenu.incSelectedIdx();
+        } else if ((button == HWButton.B || button == HWButton.C) && selectedDrive != null) {
+            // Either B or C work for select
+            Str action = actionMenu.getSelectedItem();
+            if (action == Msg.COPY) {
+                setCurrScreen(new CopyScreen(this, selectedDrive));
+            } else if (action == Msg.VIEW) {
+                setCurrScreen(new ViewScreen(this, selectedDrive));
+            } else if (action == Msg.WIPE) {
+                setCurrScreen(new WipeScreen(this, selectedDrive));
             }
+        } else if (button == HWButton.U) {
+            // Up
+            selectNextOrPrevDrive(/* next = */ false);
+        } else if (button == HWButton.D) {
+            // Down
+            selectNextOrPrevDrive(/* next = */ true);
         }
     }
 }

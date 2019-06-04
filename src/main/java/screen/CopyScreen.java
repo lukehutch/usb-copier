@@ -60,23 +60,14 @@ public class CopyScreen extends DrivesChangedListenerScreen {
 
     private TaskResult<Void> fileListingTask;
 
-    private static final Str ERROR = new Str("Error", "오류");
-    private static final Str NEED_2_DRIVES = new Str("Insert other USB", "USB 2개 필요하다");
-    private static final Str WIPEQ0 = new Str("Wipe", "먼저");
-    private static final Str WIPEQ1 = new Str("first?", "지울까?");
-    private static final Str SRC = new Str("Src", "원본");
-    private static final Str DEST = new Str("Dest", "대상");
-    private static final Str FREE = new Str("Free", "여유");
-    private static final Str WIPE = new Str("Wipe", "지울까");
-
     public CopyScreen(Screen parentScreen, DriveInfo selectedDrive) {
         super(parentScreen);
 
         this.selectedDrive = selectedDrive;
 
         // Initial status line to display while recursively reading files
-        setUI(new VLayout(new TextElement(Font.NeoDGM_16().newStyle(),
-                new Str("Reading #" + selectedDrive.port + "⠤", "#" + selectedDrive.port + "를 읽고있다⠤"))));
+        setUI(new VLayout(
+                new TextElement(Font.GNU_Unifont_16().newStyle(), new Str(Msg.READING, selectedDrive.port))));
     }
 
     @Override
@@ -117,7 +108,7 @@ public class CopyScreen extends DrivesChangedListenerScreen {
                 if (mountResultCode != 0) {
                     // Disk was not successfully mounted
                     System.out.println("Could not mount disk " + selectedDrive.partitionDevice);
-                    setUI(new VLayout(new TextElement(Font.NeoDGM_16().newStyle(), ERROR)));
+                    setUI(new VLayout(new TextElement(Font.GNU_Unifont_16().newStyle(), Msg.ERROR)));
                     waitThenGoToParentScreen(3000);
                     throw new IllegalArgumentException("Failed to mount drive");
                 }
@@ -128,8 +119,8 @@ public class CopyScreen extends DrivesChangedListenerScreen {
 
             if (fileList.isEmpty()) {
                 // Nothing to copy
-                setUI(new VLayout(new TextElement(Font.NeoDGM_16().newStyle(),
-                        new Str("#" + selectedDrive.port + " is empty", "#" + selectedDrive.port + "는 비다"))));
+                setUI(new VLayout(
+                        new TextElement(Font.GNU_Unifont_16().newStyle(), new Str(Msg.EMPTY, selectedDrive.port))));
                 waitThenGoToParentScreen(2000);
                 return null;
             }
@@ -137,28 +128,27 @@ public class CopyScreen extends DrivesChangedListenerScreen {
             int numOtherDrives = driveInfoList.size() - (driveInfoList.contains(selectedDrive) ? 1 : 0);
             if (numOtherDrives < 1) {
                 // Two or more drives need to be plugged in
-                setUI(new VLayout(new TextElement(Font.NeoDGM_16().newStyle(), NEED_2_DRIVES)));
+                setUI(new VLayout(new TextElement(Font.GNU_Unifont_16().newStyle(), Msg.NEED_2_DRIVES)));
                 return null;
             }
 
             VLayout layout = new VLayout();
 
-            layout.add(
-                    new TextElement(Font.NeoDGM_16().newStyle(),
-                            new Str("Src:#" + selectedDrive.port + ", " + fileList.size() + " files",
-                                    " 원본:#" + selectedDrive.port + "," + "파일 " + fileList.size() + "개")),
-                    VAlign.TOP);
+            layout.add(new TextElement(Font.GNU_Unifont_16().newStyle(),
+                    new Str(Msg.SRC_COUNT, selectedDrive.port, fileList.size())), VAlign.TOP);
 
             TableLayout driveTable = new TableLayout(4, 1);
-            driveTable.add(0, new TextElement(Font.NeoDGM_16().newStyle(), DEST),
-                    new TextElement(Font.NeoDGM_16().newStyle(), FREE),
-                    new TextElement(Font.NeoDGM_16().newStyle(), WIPE));
+            driveTable.add(0, new TextElement(Font.GNU_Unifont_16().newStyle(), Msg.DEST),
+                    new TextElement(Font.GNU_Unifont_16().newStyle(), Msg.FREE),
+                    new TextElement(Font.GNU_Unifont_16().newStyle(), Msg.WIPEQ));
             int row = 1;
             for (DriveInfo di : driveInfoList) {
                 if (!di.equals(selectedDrive)) {
                     driveTable.add(row, new TextElement(Font.PiOLED_5x8().newStyle(), "#" + di.port),
-                            new TextElement(Font.PiOLED_5x8().newStyle(), di.getFreeInHumanUnits(/* showTotSize = */ false)),
-                            new TextElement(Font.PiOLED_5x8().newStyle(), mountPointsToWipe.contains(di.mountPoint) ? "*" : "-"));
+                            new TextElement(Font.PiOLED_5x8().newStyle(),
+                                    di.getFreeInHumanUnits(/* showTotSize = */ false)),
+                            new TextElement(Font.PiOLED_5x8().newStyle(),
+                                    mountPointsToWipe.contains(di.mountPoint) ? "*" : "-"));
 
                     row++;
                 }
@@ -166,10 +156,8 @@ public class CopyScreen extends DrivesChangedListenerScreen {
             layout.add(driveTable, VAlign.TOP);
 
             // Add button to start copying
-            layout.add(
-                    start = new TextElement(Font.NeoDGM_16().newStyle(),
-                            new Str("Copy from #" + selectedDrive.port, "#" + selectedDrive.port + "에서 복사 시작")),
-                    VAlign.BOTTOM);
+            layout.add(start = new TextElement(Font.GNU_Unifont_16().newStyle(),
+                    new Str(Msg.COPY_FROM, selectedDrive.port)), VAlign.BOTTOM);
 
             setUI(layout);
             return null;

@@ -35,9 +35,7 @@ import java.util.List;
 
 import aobtk.font.Font;
 import aobtk.font.FontStyle;
-import aobtk.font.FontStyle.Highlight;
 import aobtk.hw.HWButton;
-import aobtk.i18n.Str;
 import aobtk.ui.element.Menu;
 import aobtk.ui.element.TextElement;
 import aobtk.ui.element.VLayout;
@@ -52,11 +50,6 @@ public class WipeScreen extends DrivesChangedListenerScreen {
     private Menu wipeMenu;
     private TextElement warningText;
 
-    private static final Str WIPE_METHOD = new Str("Wipe Method:", "지우는 방법:");
-    private static final Str QUICK = new Str("Quick", "빨리");
-    private static final Str SECURE = new Str("Secure", "안전하게");
-    private static final Str ERASE_ALL_WARNING = new Str("ERASE ALL?", "모두 다 지울까?");
-
     public WipeScreen(Screen parentScreen, DriveInfo selectedDrive) {
         super(parentScreen);
 
@@ -69,14 +62,14 @@ public class WipeScreen extends DrivesChangedListenerScreen {
         layout.add(new TextElement(Font.PiOLED_5x8().newStyle(), selectedDrive.toStringShort()), VAlign.TOP);
 
         // "Wipe Method:"
-        layout.add(new TextElement(Font.NeoDGM_16().newStyle(), WIPE_METHOD), VAlign.TOP);
+        layout.add(new TextElement(Font.GNU_Unifont_16().newStyle(), Msg.WIPE_METHOD), VAlign.TOP);
         layout.addSpace(1, VAlign.TOP);
         // "Quick" / "Secure"
-        wipeMenu = new Menu(Font.NeoDGM_16().newStyle(), 4, /* hLayout = */ true, QUICK, SECURE);
+        wipeMenu = new Menu(Font.GNU_Unifont_16().newStyle(), 4, /* hLayout = */ true, Msg.QUICK, Msg.SECURE);
         layout.add(wipeMenu, VAlign.TOP);
 
         // Add "ERASE ALL?" warning text at bottom, initially hidden
-        warningText = new TextElement(Font.NeoDGM_16().newStyle().setHighlight(FontStyle.Highlight.HALO), ERASE_ALL_WARNING);
+        warningText = new TextElement(Font.GNU_Unifont_16().newStyle().setHighlight(FontStyle.Highlight.HALO), Msg.ERASE_ALL_WARNING);
         warningText.hide(true);
         layout.add(warningText, VAlign.BOTTOM);
 

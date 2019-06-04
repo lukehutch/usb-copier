@@ -55,7 +55,7 @@ public class ViewScreen extends DrivesChangedListenerScreen {
     private volatile int viewLineIdx = 0;
 
     private volatile int viewX = 0;
-    private static final FontStyle FONT_STYLE = Font.WenQuanYi_16().newStyle();
+    private static final FontStyle FONT_STYLE = Font.GNU_Unifont_16().newStyle();
     private static final FontStyle HEADER_STYLE = FONT_STYLE.copy().setHighlight(Highlight.BLOCK);
     private static final int VIEW_X_STEP = FONT_STYLE.getFont().getMaxCharWidth() * 4;
     private static final int NUM_SCREEN_ROWS = OLEDDriver.DISPLAY_HEIGHT / FONT_STYLE.getFont().getMaxCharHeight();
@@ -68,8 +68,7 @@ public class ViewScreen extends DrivesChangedListenerScreen {
         this.selectedDrive = selectedDrive;
 
         // Initial status line to display while recursively reading files
-        textLines.add(
-                new Str("Reading #" + selectedDrive.port + "⠤", "#" + selectedDrive.port + "를 읽고있다⠤").toString());
+        textLines.add(new Str(Msg.READING, selectedDrive.port).toString());
 
         // The screen drawing UIElement
         setUI(new FullscreenUIElement() {
@@ -148,8 +147,7 @@ public class ViewScreen extends DrivesChangedListenerScreen {
                     // Successfully got file listing -- insert header line with file count
                     List<String> lines = new ArrayList<>();
                     int numFiles = fileListing.size();
-                    lines.add(0, "#" + driveInfo.port + ": " + new Str("", "파일 ") + numFiles
-                            + new Str(numFiles == 1 ? " file" : " files", "개"));
+                    lines.add(0, new Str(Msg.NUM_FILES, driveInfo.port, numFiles).toString());
 
                     // Add lines for each FileInfo object
                     for (FileInfo fi : fileListing) {
@@ -169,9 +167,7 @@ public class ViewScreen extends DrivesChangedListenerScreen {
                 .onException(e -> {
                     e.printStackTrace();
                     List<String> lines = new ArrayList<>();
-                    lines.add(new Str("Can't read #" + driveInfo.port, "#" + driveInfo.port + "를 읽을 수 없다")
-                            .toString());
-                    lines.add("(" + driveInfo.label + ")");
+                    lines.add(new Str(Msg.CANT_READ_PORT, driveInfo.port).toString());
 
                     // Update UI
                     updateTextLines(lines);

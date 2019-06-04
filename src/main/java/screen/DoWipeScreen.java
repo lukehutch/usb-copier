@@ -57,17 +57,9 @@ public class DoWipeScreen extends Screen {
 
     private volatile TaskResult<Integer> ddCommandTask;
 
-    private static final Str ERROR = new Str("Error", "오류");
-    private static final Str CANCELED = new Str("Canceled", "취소 되었다");
-    private static final Str COMPLETED = new Str("Completed", "성공적 완료");
-
-    private static Str ERASING(int port) {
-        return new Str("Erasing #" + port, "#" + port + "를 지우는 중");
-    }
-
     private void exceptionThrown(Exception e) {
         e.printStackTrace();
-        setUI(new VLayout(new TextElement(Font.NeoDGM_16().newStyle(), ERROR)));
+        setUI(new VLayout(new TextElement(Font.GNU_Unifont_16().newStyle(), Msg.ERROR)));
         waitThenGoToParentScreen(3000);
 
         // Try remounting drive, if it is unmounted
@@ -131,7 +123,7 @@ public class DoWipeScreen extends Screen {
         this.isQuick = isQuick;
 
         VLayout layout = new VLayout();
-        layout.add(new TextElement(Font.NeoDGM_16().newStyle(), ERASING(selectedDrive.port).toString()));
+        layout.add(new TextElement(Font.GNU_Unifont_16().newStyle(), new Str(Msg.ERASING, selectedDrive.port)));
         layout.addSpace(4);
         layout.add(progressBar = new ProgressBar(OLEDDriver.DISPLAY_WIDTH * 8 / 10, 10));
         setUI(layout);
@@ -246,7 +238,7 @@ public class DoWipeScreen extends Screen {
 
             if (!canceled) {
                 // Show completed status
-                setUI(new VLayout(new TextElement(Font.NeoDGM_16().newStyle(), COMPLETED)));
+                setUI(new VLayout(new TextElement(Font.GNU_Unifont_16().newStyle(), Msg.COMPLETED)));
                 waitThenGoToParentScreen(2000);
             } else {
                 // "Canceled" was already shown, and there was already a time delay during the mkfs call,
@@ -276,7 +268,7 @@ public class DoWipeScreen extends Screen {
                 // Prevent double attempt to cancel
                 ddCommandTask = null;
                 // Show canceled text
-                setUI(new VLayout(new TextElement(Font.NeoDGM_16().newStyle(), CANCELED)));
+                setUI(new VLayout(new TextElement(Font.GNU_Unifont_16().newStyle(), Msg.CANCELED)));
                 // Go back to parent
                 // (N.B. WIPE_EXECUTOR will still be trying to run mkfs, sync, and mount
                 // in the background, to get the drive back to a legible state)
