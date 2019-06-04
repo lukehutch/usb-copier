@@ -31,13 +31,13 @@
  */
 package screen;
 
-import aobtk.font.Font;
 import aobtk.hw.HWButton;
 import aobtk.i18n.Str;
 import aobtk.ui.element.Menu;
 import aobtk.ui.element.VLayout;
 import aobtk.ui.element.VLayout.VAlign;
 import aobtk.ui.screen.Screen;
+import main.Main;
 
 public class ChooseLangScreen extends Screen {
     private volatile Menu langMenu;
@@ -50,7 +50,7 @@ public class ChooseLangScreen extends Screen {
     public void open() {
         VLayout layout = new VLayout();
 
-        langMenu = new Menu(Font.GNU_Unifont_16().newStyle(), 2, /* hLayout = */ false, "English", "조선말", "中文");
+        langMenu = new Menu(Main.FONT.newStyle(), 2, /* hLayout = */ false, "English", "조선말", "中文");
         layout.add(langMenu, VAlign.CENTER);
 
         setUI(layout);

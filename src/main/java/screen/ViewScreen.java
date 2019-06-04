@@ -34,7 +34,6 @@ package screen;
 import java.util.ArrayList;
 import java.util.List;
 
-import aobtk.font.Font;
 import aobtk.font.FontStyle;
 import aobtk.font.FontStyle.Highlight;
 import aobtk.hw.HWButton;
@@ -45,6 +44,7 @@ import aobtk.ui.element.FullscreenUIElement;
 import aobtk.ui.screen.Screen;
 import aobtk.util.Command;
 import aobtk.util.TaskExecutor.TaskResult;
+import main.Main;
 import util.DriveInfo;
 import util.FileInfo;
 
@@ -55,7 +55,7 @@ public class ViewScreen extends DrivesChangedListenerScreen {
     private volatile int viewLineIdx = 0;
 
     private volatile int viewX = 0;
-    private static final FontStyle FONT_STYLE = Font.GNU_Unifont_16().newStyle();
+    private static final FontStyle FONT_STYLE = Main.FONT.newStyle();
     private static final FontStyle HEADER_STYLE = FONT_STYLE.copy().setHighlight(Highlight.BLOCK);
     private static final int VIEW_X_STEP = FONT_STYLE.getFont().getMaxCharWidth() * 4;
     private static final int NUM_SCREEN_ROWS = OLEDDriver.DISPLAY_HEIGHT / FONT_STYLE.getFont().getMaxCharHeight();

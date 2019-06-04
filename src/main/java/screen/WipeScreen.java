@@ -41,6 +41,7 @@ import aobtk.ui.element.TextElement;
 import aobtk.ui.element.VLayout;
 import aobtk.ui.element.VLayout.VAlign;
 import aobtk.ui.screen.Screen;
+import main.Main;
 import util.DriveInfo;
 
 public class WipeScreen extends DrivesChangedListenerScreen {
@@ -62,14 +63,14 @@ public class WipeScreen extends DrivesChangedListenerScreen {
         layout.add(new TextElement(Font.PiOLED_5x8().newStyle(), selectedDrive.toStringShort()), VAlign.TOP);
 
         // "Wipe Method:"
-        layout.add(new TextElement(Font.GNU_Unifont_16().newStyle(), Msg.WIPE_METHOD), VAlign.TOP);
+        layout.add(new TextElement(Main.FONT.newStyle(), Msg.WIPE_METHOD), VAlign.TOP);
         layout.addSpace(1, VAlign.TOP);
         // "Quick" / "Secure"
-        wipeMenu = new Menu(Font.GNU_Unifont_16().newStyle(), 4, /* hLayout = */ true, Msg.QUICK, Msg.SECURE);
+        wipeMenu = new Menu(Main.FONT.newStyle(), 4, /* hLayout = */ true, Msg.QUICK, Msg.SECURE);
         layout.add(wipeMenu, VAlign.TOP);
 
         // Add "ERASE ALL?" warning text at bottom, initially hidden
-        warningText = new TextElement(Font.GNU_Unifont_16().newStyle().setHighlight(FontStyle.Highlight.HALO), Msg.ERASE_ALL_WARNING);
+        warningText = new TextElement(Main.FONT.newStyle().setHighlight(FontStyle.Highlight.HALO), Msg.ERASE_ALL_WARNING);
         warningText.hide(true);
         layout.add(warningText, VAlign.BOTTOM);
 

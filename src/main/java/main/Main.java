@@ -31,6 +31,7 @@
  */
 package main;
 
+import aobtk.font.Font;
 import aobtk.hw.Bonnet;
 import aobtk.ui.screen.Screen;
 import screen.ChooseLangScreen;
@@ -39,6 +40,8 @@ import util.DiskMonitor;
 public class Main {
 
     public static DiskMonitor diskMonitor;
+    
+    public static Font FONT = Font.WQY_Song_16();
 
     public static void main(String[] args) throws Exception {
         // Start drive listener

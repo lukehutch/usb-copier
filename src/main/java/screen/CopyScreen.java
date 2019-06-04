@@ -48,6 +48,7 @@ import aobtk.ui.screen.Screen;
 import aobtk.util.Command;
 import aobtk.util.Command.CommandException;
 import aobtk.util.TaskExecutor.TaskResult;
+import main.Main;
 import util.DriveInfo;
 import util.FileInfo;
 
@@ -67,7 +68,7 @@ public class CopyScreen extends DrivesChangedListenerScreen {
 
         // Initial status line to display while recursively reading files
         setUI(new VLayout(
-                new TextElement(Font.GNU_Unifont_16().newStyle(), new Str(Msg.READING, selectedDrive.port))));
+                new TextElement(Main.FONT.newStyle(), new Str(Msg.READING, selectedDrive.port))));
     }
 
     @Override
@@ -108,7 +109,7 @@ public class CopyScreen extends DrivesChangedListenerScreen {
                 if (mountResultCode != 0) {
                     // Disk was not successfully mounted
                     System.out.println("Could not mount disk " + selectedDrive.partitionDevice);
-                    setUI(new VLayout(new TextElement(Font.GNU_Unifont_16().newStyle(), Msg.ERROR)));
+                    setUI(new VLayout(new TextElement(Main.FONT.newStyle(), Msg.ERROR)));
                     waitThenGoToParentScreen(3000);
                     throw new IllegalArgumentException("Failed to mount drive");
                 }
@@ -120,7 +121,7 @@ public class CopyScreen extends DrivesChangedListenerScreen {
             if (fileList.isEmpty()) {
                 // Nothing to copy
                 setUI(new VLayout(
-                        new TextElement(Font.GNU_Unifont_16().newStyle(), new Str(Msg.EMPTY, selectedDrive.port))));
+                        new TextElement(Main.FONT.newStyle(), new Str(Msg.EMPTY, selectedDrive.port))));
                 waitThenGoToParentScreen(2000);
                 return null;
             }
@@ -128,19 +129,19 @@ public class CopyScreen extends DrivesChangedListenerScreen {
             int numOtherDrives = driveInfoList.size() - (driveInfoList.contains(selectedDrive) ? 1 : 0);
             if (numOtherDrives < 1) {
                 // Two or more drives need to be plugged in
-                setUI(new VLayout(new TextElement(Font.GNU_Unifont_16().newStyle(), Msg.NEED_2_DRIVES)));
+                setUI(new VLayout(new TextElement(Main.FONT.newStyle(), Msg.NEED_2_DRIVES)));
                 return null;
             }
 
             VLayout layout = new VLayout();
 
-            layout.add(new TextElement(Font.GNU_Unifont_16().newStyle(),
+            layout.add(new TextElement(Main.FONT.newStyle(),
                     new Str(Msg.SRC_COUNT, selectedDrive.port, fileList.size())), VAlign.TOP);
 
             TableLayout driveTable = new TableLayout(4, 1);
-            driveTable.add(0, new TextElement(Font.GNU_Unifont_16().newStyle(), Msg.DEST),
-                    new TextElement(Font.GNU_Unifont_16().newStyle(), Msg.FREE),
-                    new TextElement(Font.GNU_Unifont_16().newStyle(), Msg.WIPEQ));
+            driveTable.add(0, new TextElement(Main.FONT.newStyle(), Msg.DEST),
+                    new TextElement(Main.FONT.newStyle(), Msg.FREE),
+                    new TextElement(Main.FONT.newStyle(), Msg.WIPEQ));
             int row = 1;
             for (DriveInfo di : driveInfoList) {
                 if (!di.equals(selectedDrive)) {
@@ -156,7 +157,7 @@ public class CopyScreen extends DrivesChangedListenerScreen {
             layout.add(driveTable, VAlign.TOP);
 
             // Add button to start copying
-            layout.add(start = new TextElement(Font.GNU_Unifont_16().newStyle(),
+            layout.add(start = new TextElement(Main.FONT.newStyle(),
                     new Str(Msg.COPY_FROM, selectedDrive.port)), VAlign.BOTTOM);
 
             setUI(layout);
