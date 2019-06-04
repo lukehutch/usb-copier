@@ -41,6 +41,8 @@ public class Main {
 
     public static DiskMonitor diskMonitor;
     
+    // Main font should have Latin1, CJK ideograph, and Hangeul support
+    // (choices: Font.WQY_Song_16(), Font.GNU_Unifont_16, Font.WQY_Unibit_16)
     public static Font FONT = Font.WQY_Song_16();
 
     public static void main(String[] args) throws Exception {

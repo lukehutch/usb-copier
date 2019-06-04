@@ -35,40 +35,36 @@ import aobtk.i18n.Str;
 
 public class Msg {
     
-    static final Str COPY = new Str("Copy", "복사");
-    static final Str VIEW = new Str("View", "보기");
-    static final Str WIPE = new Str("Wipe", "지우기");
+    static final Str COPY = new Str("Copy", "복사", "复制");
+    static final Str VIEW = new Str("View", "보기", "查看");
+    static final Str WIPE = new Str("Wipe", "지우기", "擦拭");
 
 
-    static final Str WIPE_METHOD = new Str("Wipe Method:", "지우는 방법:");
-    static final Str QUICK = new Str("Quick", "빨리");
-    static final Str SECURE = new Str("Secure", "안전하게");
-    static final Str ERASE_ALL_WARNING = new Str("ERASE ALL?", "모두 다 지울까?");
+    static final Str WIPE_METHOD = new Str("Wipe Method:", "지우는 방법:", "擦拭方法");
+    static final Str QUICK = new Str("Quick", "빨리", "快速地");
+    static final Str SECURE = new Str("Secure", "안전하게", "安全地");
+    static final Str ERASE_ALL_WARNING = new Str("ERASE ALL?", "모두 다 지울까?", "擦拭一切吗?");
 
-    static final Str NEED_2_DRIVES = new Str("Insert other USB", "USB 2개 필요하다");
+    static final Str NEED_2_DRIVES = new Str("Insert another\nUSB drive", "USB 드라이브를\n하나 더 넣으십시오", "插入另一个USB");
 
-    static final Str FREE = new Str("Free", "여유");
-    static final Str WIPEQ = new Str("Wipe?", "지울까?");
+    static final Str FREE = new Str("Free", "여유", "可用空间");
+    static final Str WIPEQ = new Str("Wipe?", "지울까?", "擦拭吗?");
 
-    static final Str ERROR = new Str("Error", "오류");
-    static final Str CANCELED = new Str("Canceled", "취소 되었다");
-    static final Str COMPLETED = new Str("Completed", "성공적 완료");
+    static final Str ERROR = new Str("Error", "오류", "发生错误");
+    static final Str CANCELED = new Str("Canceled", "취소 되었다", "操作被取消了");
+    static final Str COMPLETED = new Str("Completed", "성공적 완료", "成功完成");
 
-    private static final Str WIPEQ0 = new Str("Wipe", "먼저");
-    private static final Str WIPEQ1 = new Str("first?", "지울까?");
+    private static final Str SRC = new Str("Src", "원본", "复制源", "源驱动器");
+    static final Str DEST = new Str("Dest", "대상", "目标驱动器");
 
-    private static final Str SRC = new Str("Src", "원본");
-    static final Str DEST = new Str("Dest", "대상");
-
-    static final Str READING = new Str("Reading #$0", "#$0를 읽고있다");
-    static final Str EMPTY = new Str("#$0 is empty", "#$0는 비다");
-    static final Str SRC_COUNT = new Str("Src:#$0, $1 files", " 원본:#$0," + "파일 $1개");
+    static final Str READING = new Str("Reading #$0", "#$0를 읽고있다", "从#$0读取");
+    static final Str EMPTY = new Str("#$0 is empty", "#$0는 비다", "#$0驱动器是空的");
     
-    static final Str COPY_FROM = new Str("Copy from #$0", "#$0에서 복사 시작");
+    static final Str COPY_FROM = new Str("Copy from #$0", "#$0에서 복사 시작", "从#$0读取复制");
 
-    static final Str ERASING = new Str("Erasing #$0", "#$0를 지우는 중");
-    static final Str NO_DRIVES = new Str("Insert USB Drive", "USB를 넣으십시오");
+    static final Str ERASING = new Str("Erasing #$0", "#$0를 지우는 중", "正在擦除驱动器#$0");
+    static final Str NO_DRIVES = new Str("Insert USB Drive", "USB를 넣으십시오", "请插入USB驱动器");
 
-    static final Str NUM_FILES = new Str("#$0: $1 files", "#$0: 파일 $1개");
-    static final Str CANT_READ_PORT = new Str("Can't read #$0", "#$0를 읽을 수 없다");
+    static final Str NUM_FILES = new Str("#$0: $1 files", "#$0: 파일 $1개", "#$0驱动器包含$1个文件");
+    static final Str CANT_READ_PORT = new Str("Can't read #$0", "#$0를 읽을 수 없다", "无法读取驱动器#$0");
 }

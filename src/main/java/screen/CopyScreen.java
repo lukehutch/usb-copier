@@ -136,7 +136,7 @@ public class CopyScreen extends DrivesChangedListenerScreen {
             VLayout layout = new VLayout();
 
             layout.add(new TextElement(Main.FONT.newStyle(),
-                    new Str(Msg.SRC_COUNT, selectedDrive.port, fileList.size())), VAlign.TOP);
+                    new Str(Msg.NUM_FILES, selectedDrive.port, fileList.size())), VAlign.TOP);
 
             TableLayout driveTable = new TableLayout(4, 1);
             driveTable.add(0, new TextElement(Main.FONT.newStyle(), Msg.DEST),
