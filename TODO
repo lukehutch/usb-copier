@@ -1,6 +1,7 @@
 
-- Add Hanja chars to font
-- Make all drives mount in sync mode
+- Need to unmount after copying has finished, not just sync (otherwise drive dirty bit is set)
+
+- Zero4U hub can cause a device reset sometimes when drives are plugged in -- similar to https://raspberrypi.stackexchange.com/questions/3634/raspberry-pi-reboots-on-plugging-in-a-usb-device?newreg=cdb497b39dd84684baea1f429ff4546b
 
 - Add setup notes:
   - [N/A?] Add user "pi" to "disk" group so that they can manually mount and unmount and format disks without needing to type a password.

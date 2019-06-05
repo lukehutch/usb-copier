@@ -128,7 +128,7 @@ public class CopyScreen extends DrivesChangedListenerScreen {
             long selectedDriveUsed = selectedDrive.getUsed();
 
             /// Set up drive list table
-            TableLayout driveTable = new TableLayout(8, 2);
+            TableLayout driveTable = new TableLayout(8, 1);
             driveTable.add(0, new TextElement(Main.UI_FONT.newStyle(), Msg.DEST),
                     new TextElement(Main.UI_FONT.newStyle(), Msg.FREE),
                     new TextElement(Main.UI_FONT.newStyle(), Msg.NEEDED));
