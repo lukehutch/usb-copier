@@ -76,28 +76,31 @@ public class DoWipeScreen extends Screen {
 
     private void mkfs() throws CommandException, InterruptedException, CancellationException {
         // Format partition as vfat
-        Command.command("sudo /sbin/mkfs.vfat -F32 " + selectedDrive.partitionDevice);
+        Command.command(new String[] { "sudo", "/sbin/mkfs.vfat", "-F32", selectedDrive.partitionDevice });
     }
 
     private void unmount() throws CommandException, InterruptedException, CancellationException {
         // Unmount partition
-        Command.command("sudo udisksctl unmount --no-user-interaction -f -b " + selectedDrive.partitionDevice);
+        Command.command(new String[] { "sudo", "udisksctl", "unmount", "--no-user-interaction", "-f", "-b",
+                selectedDrive.partitionDevice });
         selectedDriveIsMounted = false;
     }
 
     private void remount() throws CommandException, InterruptedException, CancellationException {
         // Remount the partition after it has been wiped
-        Command.command("sudo udisksctl mount --no-user-interaction -b " + selectedDrive.partitionDevice);
+        Command.command(new String[] { "sudo", "udisksctl", "mount", "--no-user-interaction", "-b",
+                selectedDrive.partitionDevice });
         selectedDriveIsMounted = true;
     }
 
     private void sync() throws CommandException, InterruptedException, CancellationException {
-        Command.command("sudo sync");
+        Command.command(new String[] { "sudo", "sync" });
     }
 
     private TaskResult<Integer> ddWipe(DriveInfo selectedDrive) throws CommandException {
-        return Command.commandWithConsumer(
-                "sudo dd if=/dev/zero of=" + selectedDrive.partitionDevice + " bs=4096 status=progress", /* consumeStderr = */ true, line -> {
+        return Command.commandWithConsumer(new String[] { "sudo", "dd", "if=/dev/zero",
+                "of=" + selectedDrive.partitionDevice, "bs=4096", "status=progress" }, /* consumeStderr = */ true,
+                line -> {
                     if (!line.isEmpty() && !line.contains("records in")) {
                         // Show progress percentage
                         int spaceIdx = line.indexOf(' ');

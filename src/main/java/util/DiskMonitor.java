@@ -85,15 +85,15 @@ public class DiskMonitor {
             // plugging or unplugging a drive, and calling "udiskctl dump". (Run it in a separate executor since it
             // will run until the program terminates.)
             UDisksCtlParser monitorParser = new UDisksCtlParser(this, partitionDeviceToDriveInfo);
-            monitorJob = Command.commandWithConsumer("sudo udisksctl monitor", monitoringExecutor,
-                    /* consumeStderr = */ false, monitorParser);
+            monitorJob = Command.commandWithConsumer(new String[] { "sudo", "udisksctl", "monitor" },
+                    monitoringExecutor, /* consumeStderr = */ false, monitorParser);
 
             // Next call "udisksctl dump" once to get the initial list of plugged-in drives.
             try {
                 // Create another parser that works on the same deviceNodeToDriveInfo map, but preserves its own state,
                 // so that its lines don't end up interleaved with the lines of the other parser above
                 UDisksCtlParser dumpParser = new UDisksCtlParser(this, partitionDeviceToDriveInfo);
-                for (String line : Command.command("sudo udisksctl dump")) {
+                for (String line : Command.command(new String[] { "sudo", "udisksctl", "dump" })) {
                     dumpParser.accept(line);
                 }
             } catch (InterruptedException e) {
@@ -134,7 +134,7 @@ public class DiskMonitor {
     }
 
     /** Notify listeners that a change in drives has been detected. */
-    void drivesChanged() {
+    public void drivesChanged() {
         synchronized (drivesChangedListnerLock) {
             // Get current list of drives and sort them into increasing order of port, then decreasing order of size 
             List<DriveInfo> newDriveList = new ArrayList<>(partitionDeviceToDriveInfo.values());

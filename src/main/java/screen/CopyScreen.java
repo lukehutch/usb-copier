@@ -97,7 +97,8 @@ public class CopyScreen extends DrivesChangedListenerScreen {
                 int mountResultCode;
                 try {
                     mountResultCode = Command.commandWithConsumer(
-                            "sudo udisksctl mount --no-user-interaction -b " + selectedDrive.partitionDevice,
+                            new String[] { "sudo", "udisksctl", "mount", "--no-user-interaction", "-b",
+                                    selectedDrive.partitionDevice },
                             /* consumeStdErr = */ true, System.out::println).get();
                 } catch (CommandException | ExecutionException e) {
                     e.printStackTrace();

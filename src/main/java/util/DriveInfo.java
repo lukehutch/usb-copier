@@ -32,12 +32,8 @@
 package util;
 
 import java.io.IOException;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -46,7 +42,7 @@ import java.util.StringTokenizer;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import aobtk.util.Command;
 import aobtk.util.Command.CommandException;
@@ -92,6 +88,7 @@ public class DriveInfo implements Comparable<DriveInfo> {
                         fileListingTaskResult = recursiveListExecutor.completed(Collections.emptyList());
                     } else {
                         // Recursively read files from drive
+                        AtomicReference<TaskResult<Integer>> taskResult = new AtomicReference<>();
                         fileListingTaskResult = recursiveListExecutor.submit(new Callable<List<FileInfo>>() {
                             @Override
                             public List<FileInfo> call() throws Exception {
@@ -102,40 +99,39 @@ public class DriveInfo implements Comparable<DriveInfo> {
                                 if (!canRead) {
                                     throw new IOException("Cannot read dir " + dir);
                                 }
-                                AtomicBoolean canceled = new AtomicBoolean();
+
                                 List<FileInfo> fileListing = new ArrayList<>();
-                                Files.walkFileTree(dir, new SimpleFileVisitor<Path>() {
-                                    @Override
-                                    public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
-                                            throws IOException {
-                                        if (Thread.currentThread().isInterrupted()) {
-                                            // Check for thread interruption at each dir
-                                            canceled.set(true);
-                                            return FileVisitResult.TERMINATE;
-                                        }
-                                        return FileVisitResult.CONTINUE;
+                                try {
+                                    taskResult.set(Command.commandWithConsumer(
+                                            new String[] { "sudo", "find", mountPoint, "-type", "f", "-printf",
+                                                    "%s\\t%P\\n" },
+                                            /* consumeStderr = */ false, /* cmdConsumer = */ line -> {
+                                                int tabIdx = line.indexOf("\t");
+                                                if (tabIdx > 0) {
+                                                    fileListing
+                                                            .add(new FileInfo(Paths.get(line.substring(tabIdx + 1)),
+                                                                    Long.parseLong(line.substring(0, tabIdx))));
+                                                }
+                                            }));
+                                    // Await result
+                                    if (taskResult.get().get() != 0) {
+                                        throw new CommandException(
+                                                "Got non-zero return code from " + new String[] { "sudo", "find",
+                                                        mountPoint, "-type", "f", "-printf", "%s\\t%p\\n" });
                                     }
-
-                                    @Override
-                                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                                            throws IOException {
-                                        long size = attrs.size();
-                                        fileListing.add(new FileInfo(dir.relativize(file), size));
-                                        return FileVisitResult.CONTINUE;
-                                    }
-                                });
-
-                                // If file listing was canceled, the returned list will be truncated,
-                                // so set fileListingTaskResult to null so that the result is not cached,
-                                // and listing will be restarted on the next call
-                                if (canceled.get()) {
+                                    Collections.sort(fileListing);
+                                } catch (InterruptedException | CancellationException e) {
                                     fileListingTaskResult = null;
-                                    throw new InterruptedException();
+                                } catch (CommandException e) {
+                                    e.printStackTrace();
+                                    fileListingTaskResult = null;
                                 }
-
-                                // Sort files in lexicographic order, and return the list
-                                Collections.sort(fileListing);
                                 return fileListing;
+                            }
+                        }).onCancel(() -> {
+                            // If file listing task is canceled, cancel the find task it depends upon
+                            if (taskResult.get() != null) {
+                                taskResult.get().cancel();
                             }
                         });
                     }
@@ -165,7 +161,7 @@ public class DriveInfo implements Comparable<DriveInfo> {
                 // If the drive is not mounted, df will return zero -- try to mount the drive first
                 if (mountPoint.isEmpty()) {
                     try {
-                        Command.command("sudo udisksctl mount -b " + partitionDevice);
+                        Command.command(new String[] { "sudo", "udisksctl", "mount", "-b", partitionDevice });
                         // Generate drives changed event
                         Main.diskMonitor.drivesChanged();
                     } catch (CommandException | InterruptedException | CancellationException e) {
@@ -175,7 +171,7 @@ public class DriveInfo implements Comparable<DriveInfo> {
                 }
 
                 // Get the number of used kB on the partition using df
-                List<String> lines = Command.command("sudo df " + partitionDevice);
+                List<String> lines = Command.command(new String[] { "sudo", "df", partitionDevice });
                 if (lines.size() == 2) {
                     String line = lines.get(1);
                     boolean gotResult = false;

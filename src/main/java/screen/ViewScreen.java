@@ -129,7 +129,8 @@ public class ViewScreen extends DrivesChangedListenerScreen {
                 () -> {
                     if (!driveInfo.isMounted()) {
                         TaskResult<Integer> mountResultCode = Command.commandWithConsumer(
-                                "sudo udisksctl mount --no-user-interaction -b " + selectedDrive.partitionDevice,
+                                new String[] { "sudo", "udisksctl", "mount", "--no-user-interaction", "-b",
+                                        selectedDrive.partitionDevice },
                                 /* consumeStdErr = */ true, System.out::println);
                         if (mountResultCode.get() != 0) {
                             // Disk was not successfully mounted

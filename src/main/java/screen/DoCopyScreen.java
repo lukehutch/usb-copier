@@ -109,10 +109,11 @@ public class DoCopyScreen extends Screen {
             // files, assuming the destination drives have approximately the same write speed.
             taskExecutors[i] = new TaskExecutor();
             try {
-                TaskResult<Integer> commandResult = Command.commandWithConsumer("rsync -rlptv --info=progress2 "
-                        // End source dir in "/" to copy contents of dir, not dir itself
-                        + selectedDrive.mountPoint + "/ " //
-                        + otherDrive.mountPoint, //
+                TaskResult<Integer> commandResult = Command.commandWithConsumer(
+                        new String[] { "rsync", "-rlptv", "--info=progress2",
+                                // End source dir in "/" to copy contents of dir, not dir itself
+                                selectedDrive.mountPoint + "/ ", //
+                                otherDrive.mountPoint }, //
                         taskExecutors[i], /* consumeStderr = */ false, progressLine -> {
                             // Get progress percentage for rsync transfer
                             try {
@@ -125,7 +126,9 @@ public class DoCopyScreen extends Screen {
                                                 .parseInt(percentage.substring(0, percentage.length() - 1));
                                         if (percentageInt >= 0 && percentageInt <= 100) {
                                             // Update progress bar with rsync progress percentage
-                                            progressBar.setProgress(percentageInt, 100);
+                                            // but use 105 as the denominator, since there's still
+                                            // some work to do at the end of copy to sync and unmount
+                                            progressBar.setProgress(percentageInt, 105);
                                             repaint();
                                         }
                                     } catch (NumberFormatException e) {
@@ -193,15 +196,29 @@ public class DoCopyScreen extends Screen {
                 taskExecutors[i].shutdown();
                 taskExecutors[i] = null;
             }
-            // Mark drive contents as changed, so that size and file listing will be re-generated
-            otherDrives.get(i).contentsChanged();
         }
+
         try {
-            // Sync so drive can be pulled out
-            Command.command("sudo sync");
+            // Sync to flush buffers
+            Command.command(new String[] { "sudo", "sync" });
         } catch (CancellationException | CommandException | InterruptedException e) {
             e.printStackTrace();
         }
+
+        // Unmount so the drives can be pulled out without setting the dirty bit
+        for (int i = 0; i < otherDrives.size(); i++) {
+            try {
+                Command.command(
+                        new String[] { "sudo", "udisksctl", "mount", "-b", otherDrives.get(i).partitionDevice });
+            } catch (CancellationException | CommandException | InterruptedException e) {
+                e.printStackTrace();
+            }
+            // Mark drive contents as changed, so that size and file listing will be re-generated
+            otherDrives.get(i).contentsChanged();
+        }
+
+        // Generate drives changed event
+        Main.diskMonitor.drivesChanged();
     }
 
     @Override
