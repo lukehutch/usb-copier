@@ -163,11 +163,11 @@ public class DriveInfo implements Comparable<DriveInfo> {
                     try {
                         Command.command(new String[] { "sudo", "udisksctl", "mount", "--no-user-interaction", "-b",
                                 partitionDevice });
-                        // Generate drives changed event
-                        Main.diskMonitor.drivesChanged();
                     } catch (CommandException | InterruptedException | CancellationException e) {
                         System.out.println("Could not mount " + partitionDevice + ": " + e.getMessage());
                     }
+                    // Generate drives changed event
+                    Main.diskMonitor.drivesChanged();
                 }
 
                 // Get the number of used kB on the partition using df
