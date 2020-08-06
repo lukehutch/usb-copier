@@ -161,12 +161,12 @@ public class DriveInfo implements Comparable<DriveInfo> {
                 // If the drive is not mounted, df will return zero -- try to mount the drive first
                 if (mountPoint.isEmpty()) {
                     try {
-                        Command.command(new String[] { "sudo", "udisksctl", "mount", "-b", partitionDevice });
+                        Command.command(new String[] { "sudo", "udisksctl", "mount", "--no-user-interaction", "-b",
+                                partitionDevice });
                         // Generate drives changed event
                         Main.diskMonitor.drivesChanged();
                     } catch (CommandException | InterruptedException | CancellationException e) {
-                        System.out.println("Could not mount " + partitionDevice);
-                        e.printStackTrace();
+                        System.out.println("Could not mount " + partitionDevice + ": " + e.getMessage());
                     }
                 }
 

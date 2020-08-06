@@ -208,8 +208,8 @@ public class DoCopyScreen extends Screen {
         // Unmount so the drives can be pulled out without setting the dirty bit
         for (int i = 0; i < otherDrives.size(); i++) {
             try {
-                Command.command(
-                        new String[] { "sudo", "udisksctl", "mount", "-b", otherDrives.get(i).partitionDevice });
+                Command.command(new String[] { "sudo", "udisksctl", "mount", "--no-user-interaction", "-b",
+                        otherDrives.get(i).partitionDevice });
             } catch (CancellationException | CommandException | InterruptedException e) {
                 e.printStackTrace();
             }
