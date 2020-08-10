@@ -31,6 +31,10 @@
  */
 package main;
 
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 import aobtk.font.Font;
 import aobtk.hw.Bonnet;
 import aobtk.ui.screen.Screen;
@@ -51,11 +55,11 @@ public class Main {
 
     static {
         // Enable logging
-        String path = Main.class.getClassLoader().getResource("logging.properties").getFile();
-        if (path == null) {
-            System.err.println("logging.properties file not found");
-        } else {
-            System.setProperty("java.util.logging.config.file", path);
+        System.setProperty("java.util.logging.SimpleFormatter.format", "[%1$tF %1$tT %1$tL] [%4$-7s] %5$s %n");
+        Logger root = Logger.getLogger("");
+        root.setLevel(Level.ALL);
+        for (Handler handler : root.getHandlers()) {
+            handler.setLevel(Level.ALL);
         }
     }
 
