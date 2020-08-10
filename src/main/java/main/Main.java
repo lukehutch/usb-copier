@@ -49,6 +49,16 @@ public class Main {
     // Main UI font
     public static volatile Font UI_FONT = Font.WQY_Song_16();
 
+    static {
+        // Enable logging
+        String path = Main.class.getClassLoader().getResource("logging.properties").getFile();
+        if (path == null) {
+            System.err.println("logging.properties file not found");
+        } else {
+            System.setProperty("java.util.logging.config.file", path);
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         // Initialize the Button class, and register the GPIO event listeners
         Bonnet.init();
@@ -56,7 +66,7 @@ public class Main {
         // Start by immediately displaying a "Please Wait" screen
         // (it takes time to load the fonts, start the disk monitor, etc.)
         Bonnet.display.setFromBitBuffer(SavePleaseWaitScreen.getSavedBitBuffer());
-        
+
         // Start drive listener
         diskMonitor = new DiskMonitor();
 
