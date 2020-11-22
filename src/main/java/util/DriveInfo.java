@@ -315,7 +315,8 @@ public class DriveInfo implements Comparable<DriveInfo> {
 
     @Override
     public String toString() {
-        return partitionDevice + " -> " + mountPoint + " : " + getUsedInHumanUnits(true);
+        return partitionDevice + " -> " + mountPoint + " :" + (isPluggedIn ? " pluggedIn" : " unplugged")
+                + (isMounted ? " mounted" : " unmounted") + " used:" + getUsedInHumanUnits(true);
     }
 
     @Override

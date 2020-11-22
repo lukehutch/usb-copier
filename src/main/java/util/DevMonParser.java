@@ -79,7 +79,7 @@ class DevMonParser implements Consumer<String> {
             String udevDevice = removedMatcher.group(1);
             String partitionDevice = "/dev/" + udevDevice.substring(udevDevice.lastIndexOf("/") + 1);
 
-            // Mark drive as unmounted (since it was removed)
+            // Drive was unplugged
             DiskMonitor.driveUnplugged(partitionDevice);
 
         } else {
@@ -146,6 +146,9 @@ class DevMonParser implements Consumer<String> {
                                     Optional<String> mtabLine = Files.readAllLines(Paths.get("/etc/mtab")).stream()
                                             .filter(l -> l.startsWith(partitionDevice + " ")).findFirst();
                                     if (mtabLine.isPresent()) {
+                                        // Unescape any octal-escaped mountpoint paths (drive names can contain
+                                        // spaces or other special chars, which are escaped as octal when
+                                        // used as part of a mountpoint name)
                                         String[] parts = mtabLine.get().split(" ");
                                         if (parts.length >= 2) {
                                             mountPoint = unescapeOctal(parts[1]);
@@ -155,6 +158,7 @@ class DevMonParser implements Consumer<String> {
                                     e.printStackTrace();
                                 }
                                 if (mountPoint != null) {
+                                    // Drive is mounted
                                     DiskMonitor.driveMounted(partitionDevice, mountPoint, label);
                                 } else {
                                     System.out.println("Could not read /etc/mtab");
@@ -164,8 +168,12 @@ class DevMonParser implements Consumer<String> {
                                 DiskMonitor.driveUnmounted(partitionDevice);
                             }
                         } else {
+                            // Drive is unplugged
                             DiskMonitor.driveUnplugged(partitionDevice);
                         }
+                    } else {
+                        // Non-filesystem? Not sure what this is for, or what values are valid. Mark as unplugged.
+                        DiskMonitor.driveUnplugged(partitionDevice);
                     }
                     partitionDevice = null;
                 }

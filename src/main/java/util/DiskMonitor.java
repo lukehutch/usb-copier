@@ -183,14 +183,15 @@ public class DiskMonitor {
             // Pick the biggest partition for each drive, and skip drives that are not currently mounted
             Set<String> partitionAlreadyAdded = new HashSet<>();
             List<DriveInfo> newDriveListFiltered = new ArrayList<>(newDriveList.size());
+            System.out.println("Drives changed:");
             for (DriveInfo di : newDriveList) {
-                System.out.println("Drive: " + di);
+                System.out.println("  Drive: " + di.partitionDevice);
                 // Only add drives that are plugged in
                 if (di.isPluggedIn()) {
                     // Get only the largest partition (first in sorted order for a given port number) 
                     if (partitionAlreadyAdded.add(di.rawDriveDevice)) {
                         newDriveListFiltered.add(di);
-                        System.out.println("  Drive plugged in: " + di);
+                        System.out.println("    " + di);
                     }
                 }
             }
