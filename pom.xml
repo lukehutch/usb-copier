@@ -6,7 +6,7 @@
 	<description>USB drive copier based on Raspberry Pi Zero</description>
 	<groupId>usb-copier</groupId>
 	<artifactId>usb-copier</artifactId>
-	<version>0.0.1</version>
+	<version>0.0.2</version>
 	<modelVersion>4.0.0</modelVersion>
 	<packaging>jar</packaging>
 	<licenses>
@@ -27,8 +27,8 @@
 				<version>3.8.1</version>
 				<configuration>
 					<encoding>UTF-8</encoding>
-					<source>1.8</source>
-					<target>1.8</target>
+					<source>11</source>
+					<target>11</target>
 				</configuration>
 			</plugin>
 
@@ -79,7 +79,18 @@
 		<dependency>
 			<groupId>adafruit-oled-bonnet-toolkit</groupId>
 			<artifactId>adafruit-oled-bonnet-toolkit</artifactId>
-			<version>0.0.1</version>
+			<version>0.0.2</version>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<version>2.0.0-alpha1</version>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-log4j12</artifactId>
+			<version>2.0.0-alpha1</version>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 	<repositories>

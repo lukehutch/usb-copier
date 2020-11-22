@@ -79,11 +79,8 @@ public class SavePleaseWaitScreen {
         }
         return bitBuffer;
     }
-    
-    public static void main(String[] args) throws Exception {
-        // Initialize the Button class, and register the GPIO event listeners
-        Bonnet.init();
 
+    public static void main(String[] args) throws Exception {
         // Initialize root screen
         Screen.init(new Screen(null) {
             @Override
@@ -114,7 +111,7 @@ public class SavePleaseWaitScreen {
             System.out.println((i > 0 ? "+ " : "") + "\""
                     + screenContents.substring(i, Math.min(i + 80, screenContents.length())) + "\"");
         }
-        
+
         Bonnet.shutdown();
     }
 }

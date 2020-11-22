@@ -64,9 +64,6 @@ public class Main {
     }
 
     public static void main(String[] args) throws Exception {
-        // Initialize the Button class, and register the GPIO event listeners
-        Bonnet.init();
-
         // Start by immediately displaying a "Please Wait" screen
         // (it takes time to load the fonts, start the disk monitor, etc.)
         Bonnet.display.setFromBitBuffer(SavePleaseWaitScreen.getSavedBitBuffer());
@@ -82,7 +79,7 @@ public class Main {
             @Override
             public void run() {
                 // Stop monitoring for changes in plugged drives
-                diskMonitor.shutdown();
+                DiskMonitor.shutdown();
             }
         });
 

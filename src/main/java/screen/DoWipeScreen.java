@@ -46,11 +46,11 @@ import aobtk.util.Command.CommandException;
 import aobtk.util.TaskExecutor.TaskResult;
 import i18n.Msg;
 import main.Main;
+import util.DiskMonitor;
 import util.DriveInfo;
 
 public class DoWipeScreen extends Screen {
     private final DriveInfo selectedDrive;
-    private volatile boolean selectedDriveIsMounted;
 
     private boolean isQuick;
 
@@ -64,12 +64,12 @@ public class DoWipeScreen extends Screen {
         waitThenGoToParentScreen(3000);
 
         // Try remounting drive, if it is unmounted
-        if (!selectedDriveIsMounted) {
+        DriveInfo selectedDrive = this.selectedDrive;
+        if (selectedDrive != null && !selectedDrive.isMounted()) {
             try {
-                remount();
-            } catch (Exception e2) {
-                // Made best effort -- ignore
-                System.out.println("Couldn't remount drive " + selectedDrive.partitionDevice + ": " + e2);
+                selectedDrive.mount();
+            } catch (InterruptedException | ExecutionException e1) {
+                System.out.println("Could not mount drive after exception thrown: " + e1);
             }
         }
     }
@@ -77,24 +77,6 @@ public class DoWipeScreen extends Screen {
     private void mkfs() throws CommandException, InterruptedException, CancellationException {
         // Format partition as vfat
         Command.command(new String[] { "sudo", "/sbin/mkfs.vfat", "-F32", selectedDrive.partitionDevice });
-    }
-
-    private void unmount() throws CommandException, InterruptedException, CancellationException {
-        // Unmount partition
-        Command.command(new String[] { "sudo", "udisksctl", "unmount", "--no-user-interaction", "-f", "-b",
-                selectedDrive.partitionDevice });
-        selectedDriveIsMounted = false;
-    }
-
-    private void remount() throws CommandException, InterruptedException, CancellationException {
-        // Remount the partition after it has been wiped
-        Command.command(new String[] { "sudo", "udisksctl", "mount", "--no-user-interaction", "-b",
-                selectedDrive.partitionDevice });
-        selectedDriveIsMounted = true;
-    }
-
-    private void sync() throws CommandException, InterruptedException, CancellationException {
-        Command.command(new String[] { "sudo", "sync" });
     }
 
     private TaskResult<Integer> ddWipe(DriveInfo selectedDrive) throws CommandException {
@@ -108,7 +90,7 @@ public class DoWipeScreen extends Screen {
                             spaceIdx = line.length();
                         }
                         long bytesProcessed = Long.parseLong(line.substring(0, spaceIdx));
-                        int percent = (int) ((bytesProcessed * 100.0f) / selectedDrive.size + 0.5f);
+                        int percent = (int) ((bytesProcessed * 100.0f) / selectedDrive.diskSize + 0.5f);
                         progressBar.setProgress(percent, 100);
                         repaint();
                     }
@@ -120,7 +102,7 @@ public class DoWipeScreen extends Screen {
 
         this.selectedDrive = selectedDrive;
         if (selectedDrive == null) {
-            goToParentScreen();
+            waitThenGoToParentScreen(3000);
             return;
         }
 
@@ -142,18 +124,20 @@ public class DoWipeScreen extends Screen {
             progressBar.setProgress(0, 100);
             repaint();
 
+            DriveInfo selectedDrive = this.selectedDrive;
+            if (selectedDrive == null) {
+                goToParentScreen();
+                return;
+            }
+
             // First check if drive is originally even mounted (this allows non-mounted drives to be formatted,
             // which is important if a drive needs to be formatted after a previous format failed).
-            selectedDriveIsMounted = selectedDrive.isMounted();
-
-            if (selectedDriveIsMounted) {
-                // Unmount the partition
+            if (!selectedDrive.isMounted()) {
                 try {
-                    // Unmount the partition
-                    unmount();
-                } catch (CommandException | InterruptedException | CancellationException e1) {
-                    // If partition could not be unmounted, do not proceed (later steps will fail anyway)
-                    exceptionThrown(e1);
+                    selectedDrive.mount();
+
+                } catch (Exception e) {
+                    exceptionThrown(e);
                     return;
                 }
             }
@@ -188,48 +172,39 @@ public class DoWipeScreen extends Screen {
                 repaint();
             }
 
-            // Quick format using mkfs, followed by sync and remount
+            // Make the filesystem
             try {
                 // Format the partition (whether or not low-level format was canceled)
                 mkfs();
 
-            } catch (CommandException e4) {
+            } catch (CommandException e) {
                 // Error occurred during mkfs
-                e4.printStackTrace();
+                e.printStackTrace();
                 // Fall through, and try sync and remount
 
-            } catch (InterruptedException | CancellationException e5) {
+            } catch (InterruptedException | CancellationException e) {
                 canceled = true;
             }
 
-            // Quick format using mkfs, followed by sync and remount
-            try {
-                // sync
-                sync();
-
-            } catch (CommandException e6) {
-                // Should not happen, but fall through if so
-
-            } catch (InterruptedException | CancellationException e7) {
-                canceled = true;
-            }
+            // sync
+            DiskMonitor.sync();
 
             // Remount drive
             try {
                 // Remount the partition
-                remount();
+                selectedDrive.remount();
 
-            } catch (CommandException e8) {
-                // Error occurred during remount, so probably the drive is messed up now
-                exceptionThrown(e8);
-                return;
-
-            } catch (InterruptedException | CancellationException e9) {
+            } catch (InterruptedException | CancellationException e) {
                 canceled = true;
+
+            } catch (Exception e) {
+                // Error occurred during remount, so probably the drive is messed up now
+                exceptionThrown(e);
+                return;
             }
 
             // Mark the partition as changed now that the drive is remounted
-            selectedDrive.contentsChanged();
+            selectedDrive.clearListing();
 
             // Finished -- briefly show 100% progress at end of job
             progressBar.setProgress(100, 100);

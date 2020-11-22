@@ -35,7 +35,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -55,6 +54,7 @@ import aobtk.util.TaskExecutor;
 import aobtk.util.TaskExecutor.TaskResult;
 import i18n.Msg;
 import main.Main;
+import util.DiskMonitor;
 import util.DriveInfo;
 
 public class DoCopyScreen extends Screen {
@@ -198,27 +198,21 @@ public class DoCopyScreen extends Screen {
             }
         }
 
-        try {
-            // Sync to flush buffers
-            Command.command(new String[] { "sudo", "sync" });
-        } catch (CancellationException | CommandException | InterruptedException e) {
-            e.printStackTrace();
-        }
+        DiskMonitor.sync();
 
-        // Unmount so the drives can be pulled out without setting the dirty bit
         for (int i = 0; i < otherDrives.size(); i++) {
+            // Update drive size info
+            DriveInfo driveInfo = otherDrives.get(i);
+            driveInfo.updateDriveSizes();
+            
+            // Unmount so the drives can be pulled out without setting the dirty bit
             try {
-                Command.command(new String[] { "sudo", "udisksctl", "mount", "--no-user-interaction", "-b",
-                        otherDrives.get(i).partitionDevice });
-            } catch (CancellationException | CommandException | InterruptedException e) {
+                driveInfo.clearListing();
+                driveInfo.unmount();
+            } catch (InterruptedException | ExecutionException e) {
                 e.printStackTrace();
             }
-            // Mark drive contents as changed, so that size and file listing will be re-generated
-            otherDrives.get(i).contentsChanged();
         }
-
-        // Generate drives changed event
-        Main.diskMonitor.drivesChanged();
     }
 
     @Override

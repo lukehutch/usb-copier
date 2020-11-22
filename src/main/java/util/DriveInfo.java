@@ -48,23 +48,35 @@ import aobtk.util.Command;
 import aobtk.util.Command.CommandException;
 import aobtk.util.TaskExecutor;
 import aobtk.util.TaskExecutor.TaskResult;
-import main.Main;
 
 public class DriveInfo implements Comparable<DriveInfo> {
     /** The partition device, e.g. "/dev/sda1". */
     public final String partitionDevice;
-    /** The drive device, e.g. "/dev/sda". */
-    public volatile String driveDevice = "";
-    /** The drive label, e.g. "USB_16GB". */
-    public volatile String label = "";
+
+    /** The raw drive device, e.g. "/dev/sda". */
+    public volatile String rawDriveDevice = "";
+
+    /** True if the drive is plugged in, whether or not it's mounted. */
+    public volatile boolean isPluggedIn;
+
+    /** True if the drive is mounted. */
+    public volatile boolean isMounted;
+
     /** The mount point, e.g. "/media/pi/USB_16GB". */
     public volatile String mountPoint = "";
+
+    /** The drive label, e.g. "USB_16GB". */
+    public volatile String label = "";
+
     /** The drive size in bytes. */
-    public volatile long size;
+    public volatile long diskSize = -1L;
+
+    /** The disk space used in bytes. */
+    public volatile long diskSpaceUsed = -1L;
+
     /** The USB port the drive is plugged into (1-4). */
     public volatile int port;
 
-    private final TaskExecutor dfExecutor = new TaskExecutor();
     private final TaskExecutor recursiveListExecutor = new TaskExecutor();
     private final Object fileListingLock = new Object();
 
@@ -72,6 +84,12 @@ public class DriveInfo implements Comparable<DriveInfo> {
 
     public DriveInfo(String partitionDevice) {
         this.partitionDevice = partitionDevice;
+
+        rawDriveDevice = partitionDevice;
+        while (rawDriveDevice.length() > 1
+                && Character.isDigit(rawDriveDevice.charAt(rawDriveDevice.length() - 1))) {
+            rawDriveDevice = rawDriveDevice.substring(0, rawDriveDevice.length() - 1);
+        }
     }
 
     /**
@@ -142,86 +160,73 @@ public class DriveInfo implements Comparable<DriveInfo> {
     }
 
     public long getUsed() {
-        if (Main.diskMonitor == null) {
-            System.out.println("Called getUsed() before initialization");
-            // Not yet initialized
-            return -1L;
-        }
-        long used = Main.diskMonitor.getUsed(partitionDevice);
-        if (used != -1L) {
-            // Size is already known from a previous call to df -- return the size
-            return used;
-        }
+        return diskSpaceUsed;
+    }
 
-        // Schedule a df job, then return -1 as the size for now.
-        // Once the size is known and cached, a drive change event is generated.
-        // If there's not a df job already scheduled for this drive
-        dfExecutor.submit(() -> {
+    public long getFree() {
+        return Math.max(0, diskSize - diskSpaceUsed);
+    }
+
+    public boolean isPluggedIn() {
+        return isPluggedIn;
+    }
+
+    public boolean isMounted() {
+        return isMounted;
+    }
+
+    public void unmount() throws InterruptedException, ExecutionException {
+        DiskMonitor.taskExecutor.submitCommand("sudo", "devmon", "--unmount", partitionDevice).get();
+    }
+
+    public void mount() throws InterruptedException, ExecutionException {
+        DiskMonitor.taskExecutor.submitCommand("sudo", "devmon", "--mount", partitionDevice).get();
+        updateDriveSizes();
+    }
+
+    public void remount() throws InterruptedException, ExecutionException {
+        unmount();
+        mount();
+    }
+
+    public void updateDriveSizes() {
+        // Schedule a df job to get size and free space for drive
+        DiskMonitor.taskExecutor.submit(() -> {
             try {
-                // If the drive is not mounted, df will return zero -- try to mount the drive first
-                if (mountPoint.isEmpty()) {
-                    try {
-                        Command.command(new String[] { "sudo", "udisksctl", "mount", "--no-user-interaction", "-b",
-                                partitionDevice });
-                    } catch (CommandException | InterruptedException | CancellationException e) {
-                        System.out.println("Could not mount " + partitionDevice + ": " + e.getMessage());
-                    }
-                    // Generate drives changed event
-                    Main.diskMonitor.drivesChanged();
-                }
-
                 // Get the number of used kB on the partition using df
-                List<String> lines = Command.command(new String[] { "sudo", "df", partitionDevice });
+                boolean ok = false;
+                List<String> lines = Command.command(new String[] { "df", "-B", "1", partitionDevice });
                 if (lines.size() == 2) {
                     String line = lines.get(1);
-                    boolean gotResult = false;
+                    System.out.println(line);
                     if (line.startsWith(partitionDevice + " ") || line.startsWith(partitionDevice + "\t")) {
                         try {
                             StringTokenizer tok = new StringTokenizer(line);
                             tok.nextToken();
-                            tok.nextToken();
-                            String usedTok = tok.nextToken();
-
-                            // Cache value to avoid running df again
-                            long usedVal = Long.parseLong(usedTok) * 1024L;
-                            Main.diskMonitor.setUsed(partitionDevice, usedVal);
-
-                            // Generate drives changed event
-                            Main.diskMonitor.drivesChanged();
-
-                            gotResult = true;
-                        } catch (NoSuchElementException e) {
+                            diskSize = Long.parseLong(tok.nextToken());
+                            diskSpaceUsed = Long.parseLong(tok.nextToken());
+                            System.out.println(
+                                    "Disk size for " + partitionDevice + " : " + diskSpaceUsed + " / " + diskSize);
+                            ok = true;
+                        } catch (NumberFormatException | NoSuchElementException e) {
+                            e.printStackTrace();
                         }
                     }
-                    if (!gotResult) {
-                        // For some reason "sudo df /dev/sda1" returns a line for devtmpfs if the drive
-                        // is still being mounted
-                        System.out.println("Got wrong drive info back from df: expected " + partitionDevice
-                                + ", got: " + line);
-
-                        // Try again after a couple of seconds
-                        Thread.sleep(2000);
-                        dfExecutor.submit(() -> getUsed());
-                    }
+                }
+                if (ok) {
+                    // Mark drives as changed if df succeeds
+                    DiskMonitor.drivesChanged();
+                } else {
+                    System.out.println("Got bad output from df:\n" + String.join("\n", lines));
                 }
             } catch (CommandException e) {
                 System.out.println("Could not get size of " + partitionDevice + " : " + e);
             } catch (InterruptedException | CancellationException e) {
-                // Interrupted -- leave as -1
             }
         });
-        return -1L;
     }
 
-    public long getFree() {
-        return Math.max(0, size - getUsed());
-    }
-
-    public boolean isMounted() {
-        return !mountPoint.isEmpty() && getUsed() >= 0L;
-    }
-
-    public void contentsChanged() {
+    public void clearListing() {
         // Clear previous file listing
         if (fileListingTaskResult != null) {
             synchronized (fileListingLock) {
@@ -230,8 +235,7 @@ public class DriveInfo implements Comparable<DriveInfo> {
                 }
             }
         }
-        // Mark used as unknown
-        Main.diskMonitor.setUsed(partitionDevice, -1L);
+        updateDriveSizes();
     }
 
     protected void transferCacheFrom(DriveInfo oldDriveInfo) {
@@ -297,12 +301,12 @@ public class DriveInfo implements Comparable<DriveInfo> {
     }
 
     public String getUsedInHumanUnits(boolean showTotSize) {
-        return getInHumanUnits(Math.min(getUsed(), size), size, showTotSize);
+        return getInHumanUnits(Math.min(diskSpaceUsed, diskSize), diskSize, showTotSize);
     }
 
     public String getFreeInHumanUnits(boolean showTotSize) {
-        long used = getUsed();
-        return getInHumanUnits(used < 0 ? -1L : Math.max(0L, size - used), size, showTotSize);
+        return getInHumanUnits(diskSpaceUsed < 0 ? -1L : Math.max(0L, diskSize - diskSpaceUsed), diskSize,
+                showTotSize);
     }
 
     public String toStringShort() {
@@ -311,7 +315,7 @@ public class DriveInfo implements Comparable<DriveInfo> {
 
     @Override
     public String toString() {
-        return "Port " + port + " : " + partitionDevice + " -> " + mountPoint + " : " + getUsedInHumanUnits(true);
+        return partitionDevice + " -> " + mountPoint + " : " + getUsedInHumanUnits(true);
     }
 
     @Override
@@ -328,16 +332,16 @@ public class DriveInfo implements Comparable<DriveInfo> {
     }
 
     /**
-     * Sort into increasing order of port, then decreasing order of partition size.
+     * Sort into increasing order of raw device, then decreasing order of partition size.
      */
     @Override
     public int compareTo(DriveInfo other) {
-        int portDiff = port - other.port;
+        int portDiff = rawDriveDevice.compareTo(other.rawDriveDevice);
         if (portDiff != 0) {
             return portDiff;
         }
         // Tiebreaker (should not be needed)
-        long sizeDiff = other.size - size;
+        long sizeDiff = other.diskSize - diskSize;
         return sizeDiff < 0L ? -1 : sizeDiff > 0L ? 1 : 0;
     }
 

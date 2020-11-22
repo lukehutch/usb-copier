@@ -37,28 +37,38 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 
 import aobtk.util.Command;
-import aobtk.util.TaskExecutor;
 import aobtk.util.Command.CommandException;
+import aobtk.util.TaskExecutor;
 import aobtk.util.TaskExecutor.TaskResult;
 
 public class DiskMonitor {
 
-    private TaskResult<Integer> monitorJob;
+    private static final TaskExecutor monitoringExecutor = new TaskExecutor();
+    private static TaskResult<Integer> monitorJob;
 
-    private final Map<String, DriveInfo> partitionDeviceToDriveInfo = new ConcurrentHashMap<>();
+    static {
+        try {
+            // Start the devmon thread (run in a separate executor since it will run until the program terminates.)
+            monitorJob = Command.commandWithConsumer(new String[] { "sudo", "-u", "pi", "devmon" },
+                    monitoringExecutor, /* consumeStderr = */ false, new DevMonParser());
+        } catch (CommandException e) {
+            throw new RuntimeException("Error when attempting to start devmon: " + e);
+        }
+    }
 
-    private final Map<String, Long> partitionDeviceToUsed = new ConcurrentHashMap<>();
+    private static final Map<String, DriveInfo> partitionDeviceToDriveInfo = new ConcurrentHashMap<>();
 
-    private static List<DriveInfo> currDriveList = Collections.emptyList();
+    private static volatile List<DriveInfo> currDriveList = Collections.emptyList();
 
     private static final Set<DrivesChangedListener> drivesChangedListeners = new HashSet<>();
 
     private static final Object drivesChangedListnerLock = new Object();
 
-    private static final TaskExecutor monitoringExecutor = new TaskExecutor();
+    static final TaskExecutor taskExecutor = new TaskExecutor();
 
     public interface DrivesChangedListener {
         public void drivesChanged(List<DriveInfo> currDrives);
@@ -79,62 +89,92 @@ public class DiskMonitor {
         }
     }
 
-    public DiskMonitor() {
+    private static DriveInfo getOrCreateDriveInfo(String partitionDevice) {
+        return partitionDeviceToDriveInfo.computeIfAbsent(partitionDevice, p -> new DriveInfo(partitionDevice));
+    }
+
+    /** Drive is mounted and drive metadata has been read. */
+    static void driveMounted(String partitionDevice, String mountPoint, String label) {
+        DriveInfo driveInfo = getOrCreateDriveInfo(partitionDevice);
+        driveInfo.mountPoint = mountPoint;
+        driveInfo.label = label;
+        driveInfo.isPluggedIn = true;
+        driveInfo.isMounted = true;
+
+        // Use device letter as port. TODO: get USB port from /proc
+        driveInfo.port = driveInfo.rawDriveDevice.charAt(driveInfo.rawDriveDevice.length() - 1) - 'a';
+
+        // Call df to get drive sizes (updated asynchronously)
+        driveInfo.diskSize = -1L;
+        driveInfo.diskSpaceUsed = -1L;
+        driveInfo.updateDriveSizes(); // Calls drivesChanged() if successful
+
+        System.out.println("Drive mounted: " + driveInfo);
+    }
+
+    /** Drive was unplugged */
+    static void driveUnplugged(String partitionDevice) {
+        DriveInfo driveInfo = getOrCreateDriveInfo(partitionDevice);
+        driveInfo.mountPoint = "";
+        driveInfo.label = "";
+        driveInfo.port = 0;
+        driveInfo.isPluggedIn = false;
+        driveInfo.isMounted = false;
+        driveInfo.diskSize = -1L;
+        driveInfo.diskSpaceUsed = -1L;
+        drivesChanged();
+
+        System.out.println("Drive unplugged: " + driveInfo);
+    }
+
+    /** Drive was unmounted */
+    static void driveUnmounted(String partitionDevice) {
+        DriveInfo driveInfo = getOrCreateDriveInfo(partitionDevice);
+        driveInfo.isMounted = false;
+        driveInfo.mountPoint = "";
+        // Leave diskSize and diskSpaceUsed with the values they had before drive was unmounted,
+        // so that drive can be unmounted after a copy (to prevent the dirty bit being set if the
+        // drive is unplugged), but sizes can still be shown.
+        drivesChanged();
+
+        System.out.println("Drive unmounted: " + driveInfo);
+    }
+
+    public static void remountAll() {
+        sync();
+        unmountAll();
+        mountAll();
+    }
+
+    public static void sync() {
         try {
-            // Start the "udisksctl monitor" thread first (to prevent a race condition between monitoring for changes,
-            // plugging or unplugging a drive, and calling "udiskctl dump". (Run it in a separate executor since it
-            // will run until the program terminates.)
-            UDisksCtlParser monitorParser = new UDisksCtlParser(this, partitionDeviceToDriveInfo);
-            monitorJob = Command.commandWithConsumer(new String[] { "sudo", "udisksctl", "monitor" },
-                    monitoringExecutor, /* consumeStderr = */ false, monitorParser);
-
-            // Next call "udisksctl dump" once to get the initial list of plugged-in drives.
-            try {
-                // Create another parser that works on the same deviceNodeToDriveInfo map, but preserves its own state,
-                // so that its lines don't end up interleaved with the lines of the other parser above
-                UDisksCtlParser dumpParser = new UDisksCtlParser(this, partitionDeviceToDriveInfo);
-                for (String line : Command.command(new String[] { "sudo", "udisksctl", "dump" })) {
-                    dumpParser.accept(line);
-                }
-            } catch (InterruptedException e) {
-                // Should not happen
-                throw new CommandException(e);
-            }
-
-        } catch (CommandException e) {
-            throw new RuntimeException("Error when attempting to start \"udisksctl monitor\": " + e);
+            Command.command("sync");
+        } catch (InterruptedException | CommandException e) {
+            System.out.println("Could not sync: " + e);
         }
     }
 
-    void driveUnmounted(String partitionDevice) {
-        partitionDeviceToUsed.remove(partitionDevice);
+    public static void unmountAll() {
+        try {
+            Command.command("sudo", "devmon", "--unmount-all");
+        } catch (CommandException e) {
+            System.out.println("Could not unmount all drives: " + e);
+        } catch (InterruptedException | CancellationException e) {
+        }
     }
 
-    void driveUnplugged(String partitionDevice) {
-        System.out.println("Drive unplugged: " + partitionDevice);
-        partitionDeviceToDriveInfo.remove(partitionDevice);
-        partitionDeviceToUsed.remove(partitionDevice);
-    }
-
-    public void drivePlugged(String partitionDevice) {
-        System.out.println("Drive plugged in: " + partitionDevice);
-    }
-
-    long getUsed(String partitionDevice) {
-        Long used = partitionDeviceToUsed.get(partitionDevice);
-        return used == null ? -1L : used;
-    }
-
-    void setUsed(String partitionDevice, long used) {
-        if (used == -1L) {
-            partitionDeviceToUsed.remove(partitionDevice);
-        } else {
-            partitionDeviceToUsed.put(partitionDevice, used);
+    public static void mountAll() {
+        try {
+            Command.command("sudo", "-u", "pi", "devmon", "--mount-all");
+        } catch (CommandException e) {
+            // Ignore -- for some reason this always returns exit code 3
+            // https://github.com/IgnorantGuru/udevil/issues/100
+        } catch (InterruptedException | CancellationException e) {
         }
     }
 
     /** Notify listeners that a change in drives has been detected. */
-    public void drivesChanged() {
+    static void drivesChanged() {
         synchronized (drivesChangedListnerLock) {
             // Get current list of drives and sort them into increasing order of port, then decreasing order of size 
             List<DriveInfo> newDriveList = new ArrayList<>(partitionDeviceToDriveInfo.values());
@@ -144,9 +184,14 @@ public class DiskMonitor {
             Set<String> partitionAlreadyAdded = new HashSet<>();
             List<DriveInfo> newDriveListFiltered = new ArrayList<>(newDriveList.size());
             for (DriveInfo di : newDriveList) {
-                // Get only the largest partition (first in sorted order for a given port number) 
-                if (partitionAlreadyAdded.add(di.driveDevice)) {
-                    newDriveListFiltered.add(di);
+                System.out.println("Drive: " + di);
+                // Only add drives that are plugged in
+                if (di.isPluggedIn()) {
+                    // Get only the largest partition (first in sorted order for a given port number) 
+                    if (partitionAlreadyAdded.add(di.rawDriveDevice)) {
+                        newDriveListFiltered.add(di);
+                        System.out.println("  Drive plugged in: " + di);
+                    }
                 }
             }
 
@@ -170,11 +215,14 @@ public class DiskMonitor {
         }
     }
 
-    public void shutdown() {
-        // Shut down "udisksctl monitor" process
+    public static void shutdown() {
+        // Shut down devmon process
         monitorJob.cancel();
 
         // Clear listener list
         drivesChangedListeners.clear();
+
+        monitoringExecutor.shutdown();
+        taskExecutor.shutdown();
     }
 }
