@@ -35,19 +35,14 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.Future;
 
-import aobtk.util.Command;
-import aobtk.util.Command.CommandException;
-import aobtk.util.TaskExecutor;
-import aobtk.util.TaskExecutor.TaskResult;
+import exec.Exec;
 
 public class DriveInfo implements Comparable<DriveInfo> {
     /** The partition device, e.g. "/dev/sda1". */
@@ -77,10 +72,9 @@ public class DriveInfo implements Comparable<DriveInfo> {
     /** The USB port the drive is plugged into (1-4). */
     public volatile int port;
 
-    private final TaskExecutor recursiveListExecutor = new TaskExecutor();
     private final Object fileListingLock = new Object();
 
-    private volatile TaskResult<List<FileInfo>> fileListingTaskResult;
+    private volatile Future<List<FileInfo>> fileListingFuture;
 
     public DriveInfo(String partitionDevice) {
         this.partitionDevice = partitionDevice;
@@ -93,70 +87,45 @@ public class DriveInfo implements Comparable<DriveInfo> {
     }
 
     /**
-     * Recursively list files for drive. Result is cached. {@link TaskResult#get()} will throw an
+     * Recursively list files for drive. Result is cached. {@link Future#get()} will throw an
      * {@link ExecutionException} if something went wrong.
      */
-    public TaskResult<List<FileInfo>> getFileListTask() {
-        if (fileListingTaskResult == null) {
+    public Future<List<FileInfo>> getFileListTask() {
+        if (fileListingFuture == null) {
             synchronized (fileListingLock) {
                 // Prevent race condition -- check fileListingFuture again inside synchronized block 
-                if (fileListingTaskResult == null) {
+                if (fileListingFuture == null) {
                     if (mountPoint.isEmpty()) {
                         // Drive is not mounted
-                        fileListingTaskResult = recursiveListExecutor.completed(Collections.emptyList());
+                        fileListingFuture = CompletableFuture
+                                .failedFuture(new IOException("Not mounted: " + partitionDevice));
                     } else {
-                        // Recursively read files from drive
-                        AtomicReference<TaskResult<Integer>> taskResult = new AtomicReference<>();
-                        fileListingTaskResult = recursiveListExecutor.submit(new Callable<List<FileInfo>>() {
-                            @Override
-                            public List<FileInfo> call() throws Exception {
-                                // Walk directory tree, listing files and getting filesizes
-                                Path dir = Paths.get(mountPoint);
-                                System.out.println("Scanning files for mount point " + dir);
-                                boolean canRead = dir.toFile().canRead();
-                                if (!canRead) {
-                                    throw new IOException("Cannot read dir " + dir);
-                                }
-
-                                List<FileInfo> fileListing = new ArrayList<>();
-                                try {
-                                    taskResult.set(Command.commandWithConsumer(
-                                            new String[] { "sudo", "find", mountPoint, "-type", "f", "-printf",
-                                                    "%s\\t%P\\n" },
-                                            /* consumeStderr = */ false, /* cmdConsumer = */ line -> {
-                                                int tabIdx = line.indexOf("\t");
-                                                if (tabIdx > 0) {
-                                                    fileListing
-                                                            .add(new FileInfo(Paths.get(line.substring(tabIdx + 1)),
-                                                                    Long.parseLong(line.substring(0, tabIdx))));
-                                                }
-                                            }));
-                                    // Await result
-                                    if (taskResult.get().get() != 0) {
-                                        throw new CommandException(
-                                                "Got non-zero return code from " + new String[] { "sudo", "find",
-                                                        mountPoint, "-type", "f", "-printf", "%s\\t%p\\n" });
+                        fileListingFuture = Exec.thenMap(
+                                Exec.execWithTaskOutput("find", mountPoint, "-type", "f", "-printf", "%s\\t%P\\n"),
+                                taskOutput -> {
+                                    if (taskOutput.exitCode != 0) {
+                                        throw new IOException("Could not list files: " + taskOutput.stderr);
+                                    } else {
+                                        Path dir = Paths.get(mountPoint);
+                                        System.out.println("Scanning files for mount point: " + dir);
+                                        boolean canRead = dir.toFile().canRead();
+                                        if (!canRead) {
+                                            throw new IOException("Cannot read dir: " + dir);
+                                        }
+                                        List<FileInfo> fileListing = new ArrayList<>();
+                                        for (String line : taskOutput.stdout.split("\n")) {
+                                            int tabIdx = line.indexOf("\t");
+                                            fileListing.add(new FileInfo(Paths.get(line.substring(tabIdx + 1)),
+                                                    Long.parseLong(line.substring(0, tabIdx))));
+                                        }
+                                        return fileListing;
                                     }
-                                    Collections.sort(fileListing);
-                                } catch (InterruptedException | CancellationException e) {
-                                    fileListingTaskResult = null;
-                                } catch (CommandException e) {
-                                    e.printStackTrace();
-                                    fileListingTaskResult = null;
-                                }
-                                return fileListing;
-                            }
-                        }).onCancel(() -> {
-                            // If file listing task is canceled, cancel the find task it depends upon
-                            if (taskResult.get() != null) {
-                                taskResult.get().cancel();
-                            }
-                        });
+                                });
                     }
                 }
             }
         }
-        return fileListingTaskResult;
+        return fileListingFuture;
     }
 
     public long getUsed() {
@@ -176,12 +145,13 @@ public class DriveInfo implements Comparable<DriveInfo> {
     }
 
     public void unmount() throws InterruptedException, ExecutionException {
-        DiskMonitor.taskExecutor.submitCommand("sudo", "devmon", "--unmount", partitionDevice).get();
+        Exec.execWithTaskOutputSynchronous("devmon", "--unmount", partitionDevice);
+        clearListing();
     }
 
     public void mount() throws InterruptedException, ExecutionException {
-        DiskMonitor.taskExecutor.submitCommand("sudo", "devmon", "--mount", partitionDevice).get();
-        updateDriveSizes();
+        Exec.execWithTaskOutputSynchronous("devmon", "--mount", partitionDevice);
+        updateDriveSizesAsync();
     }
 
     public void remount() throws InterruptedException, ExecutionException {
@@ -189,16 +159,15 @@ public class DriveInfo implements Comparable<DriveInfo> {
         mount();
     }
 
-    public void updateDriveSizes() {
-        // Schedule a df job to get size and free space for drive
-        DiskMonitor.taskExecutor.submit(() -> {
-            try {
-                // Get the number of used kB on the partition using df
-                boolean ok = false;
-                List<String> lines = Command.command(new String[] { "df", "-B", "1", partitionDevice });
-                if (lines.size() == 2) {
-                    String line = lines.get(1);
-                    System.out.println(line);
+    public void updateDriveSizesAsync() {
+        Exec.then(Exec.execWithTaskOutput("df", "-B", "1", partitionDevice), taskOutput -> {
+            if (taskOutput.exitCode != 0) {
+                System.out.println("Bad exit code " + taskOutput.exitCode + " from df: " + taskOutput.stderr);
+            } else {
+                String[] lines = taskOutput.stdout.split("\n");
+                if (lines.length == 2) {
+                    String line = lines[1];
+                    // System.out.println(line);
                     if (line.startsWith(partitionDevice + " ") || line.startsWith(partitionDevice + "\t")) {
                         try {
                             StringTokenizer tok = new StringTokenizer(line);
@@ -207,40 +176,32 @@ public class DriveInfo implements Comparable<DriveInfo> {
                             diskSpaceUsed = Long.parseLong(tok.nextToken());
                             System.out.println(
                                     "Disk size for " + partitionDevice + " : " + diskSpaceUsed + " / " + diskSize);
-                            ok = true;
                         } catch (NumberFormatException | NoSuchElementException e) {
                             e.printStackTrace();
                         }
                     }
-                }
-                if (ok) {
-                    // Mark drives as changed if df succeeds
-                    DiskMonitor.drivesChanged();
                 } else {
-                    System.out.println("Got bad output from df:\n" + String.join("\n", lines));
+                    System.out.println("Got bad output from df:\n" + taskOutput.stdout);
                 }
-            } catch (CommandException e) {
-                System.out.println("Could not get size of " + partitionDevice + " : " + e);
-            } catch (InterruptedException | CancellationException e) {
             }
         });
     }
 
     public void clearListing() {
         // Clear previous file listing
-        if (fileListingTaskResult != null) {
+        if (fileListingFuture != null) {
             synchronized (fileListingLock) {
-                if (fileListingTaskResult != null) {
-                    fileListingTaskResult = null;
+                if (fileListingFuture != null) {
+                    fileListingFuture = null;
                 }
             }
         }
-        updateDriveSizes();
+        updateDriveSizesAsync();
     }
 
     protected void transferCacheFrom(DriveInfo oldDriveInfo) {
-        if (this.fileListingTaskResult == null) {
-            this.fileListingTaskResult = oldDriveInfo.fileListingTaskResult;
+        if (this.fileListingFuture == null) {
+            this.fileListingFuture = oldDriveInfo.fileListingFuture;
         }
     }
 
@@ -294,10 +255,6 @@ public class DriveInfo implements Comparable<DriveInfo> {
         } else {
             return (numer >= 0 ? decFrac(numer, _1G) : UNK) + (showDenom ? "/" + decFrac(denom, _1G) : "") + "GB";
         }
-    }
-
-    public static void main(String[] args) {
-        System.out.println(getInHumanUnits(4294967295L, 32 * 1024 * 1024 * 1024L, false));
     }
 
     public String getUsedInHumanUnits(boolean showTotSize) {

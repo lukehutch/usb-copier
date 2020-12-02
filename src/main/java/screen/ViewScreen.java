@@ -33,6 +33,9 @@ package screen;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 import aobtk.font.FontStyle;
 import aobtk.font.FontStyle.Highlight;
@@ -42,8 +45,7 @@ import aobtk.oled.Display;
 import aobtk.oled.OLEDDriver;
 import aobtk.ui.element.FullscreenUIElement;
 import aobtk.ui.screen.Screen;
-import aobtk.util.Command;
-import aobtk.util.TaskExecutor.TaskResult;
+import exec.Exec;
 import i18n.Msg;
 import main.Main;
 import util.DriveInfo;
@@ -61,7 +63,7 @@ public class ViewScreen extends DrivesChangedListenerScreen {
     private static final int VIEW_X_STEP = FONT_STYLE.getFont().getMaxCharWidth() * 4;
     private static final int NUM_SCREEN_ROWS = OLEDDriver.DISPLAY_HEIGHT / FONT_STYLE.getFont().getMaxCharHeight();
 
-    private TaskResult<Void> fileListingTask;
+    private Future<?> fileListingTask;
 
     public ViewScreen(Screen parentScreen, DriveInfo selectedDrive) {
         super(parentScreen);
@@ -121,58 +123,54 @@ public class ViewScreen extends DrivesChangedListenerScreen {
 
         if (fileListingTask != null) {
             // Still working on previous task -- cancel it
-            fileListingTask.cancel();
+            fileListingTask.cancel(true);
         }
 
-        fileListingTask = taskExecutor.submit( //
+        fileListingTask = Exec.executor.submit( //
                 // Check if drive is mounted, and if not, mount it
                 () -> {
                     if (!driveInfo.isMounted()) {
-                        TaskResult<Integer> mountResultCode = Command.commandWithConsumer(
-                                new String[] { "sudo", "udisksctl", "mount", "--no-user-interaction", "-b",
-                                        selectedDrive.partitionDevice },
-                                /* consumeStdErr = */ true, System.out::println);
-                        if (mountResultCode.get() != 0) {
+                        try {
+                            driveInfo.mount();
+                        } catch (ExecutionException | InterruptedException e) {
                             // Disk was not successfully mounted
-                            System.out.println("Could not mount disk " + selectedDrive.partitionDevice);
-                            throw new IllegalArgumentException("Failed to mount drive");
+                            throw new IllegalArgumentException(
+                                    "Failed to mount drive " + selectedDrive.partitionDevice, e);
                         }
                     }
-                    return null;
-                })
 
-                // Then convert file listing into text lines
-                .then(ignored -> {
                     // Recursively walk the directory tree for the drive 
-                    List<FileInfo> fileListing = driveInfo.getFileListTask().get();
+                    List<FileInfo> fileListing;
+                    try {
+                        fileListing = driveInfo.getFileListTask().get();
 
-                    // Successfully got file listing -- insert header line with file count
-                    List<String> lines = new ArrayList<>();
-                    int numFiles = fileListing.size();
-                    lines.add(0, new Str(Msg.NUM_FILES, driveInfo.port, numFiles).toString());
+                        // Successfully got file listing -- insert header line with file count
+                        List<String> lines = new ArrayList<>();
+                        int numFiles = fileListing.size();
+                        lines.add(0, new Str(Msg.NUM_FILES, driveInfo.port, numFiles).toString());
 
-                    // Add lines for each FileInfo object
-                    for (FileInfo fi : fileListing) {
-                        lines.add(fi.toString());
+                        // Add lines for each FileInfo object
+                        for (FileInfo fi : fileListing) {
+                            lines.add(fi.toString());
+                        }
+
+                        // Update UI
+                        updateTextLines(lines);
+
+                    } catch (InterruptedException | CancellationException e) {
+                        System.out.println("Canceled file listing");
+                        
+                    } catch (ExecutionException e) {
+                        // Display error message if anything went wrong
+                        e.printStackTrace();
+                        List<String> lines = new ArrayList<>();
+                        lines.add(new Str(Msg.CANT_READ_PORT, driveInfo.port).toString());
+
+                        // Update UI
+                        updateTextLines(lines);
                     }
 
-                    // Update UI
-                    updateTextLines(lines);
-                })
-
-                // If either of the above tasks is canceled, then also cancel recursive file listing task
-                .onCancel(() -> {
-                    driveInfo.getFileListTask().cancel();
-                })
-
-                // Display error message if anything went wrong
-                .onException(e -> {
-                    e.printStackTrace();
-                    List<String> lines = new ArrayList<>();
-                    lines.add(new Str(Msg.CANT_READ_PORT, driveInfo.port).toString());
-
-                    // Update UI
-                    updateTextLines(lines);
+                    return null; // use Callable
                 });
     }
 

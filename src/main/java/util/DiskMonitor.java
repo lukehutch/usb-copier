@@ -37,27 +37,24 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Future;
 
-import aobtk.util.Command;
-import aobtk.util.Command.CommandException;
-import aobtk.util.TaskExecutor;
-import aobtk.util.TaskExecutor.TaskResult;
+import exec.Exec;
+import exec.Exec.TaskOutput;
 
 public class DiskMonitor {
 
-    private static final TaskExecutor monitoringExecutor = new TaskExecutor();
-    private static TaskResult<Integer> monitorJob;
+    private static Future<Integer> monitorJob;
 
     static {
-        try {
-            // Start the devmon thread (run in a separate executor since it will run until the program terminates.)
-            monitorJob = Command.commandWithConsumer(new String[] { "sudo", "-u", "pi", "devmon" },
-                    monitoringExecutor, /* consumeStderr = */ false, new DevMonParser());
-        } catch (CommandException e) {
-            throw new RuntimeException("Error when attempting to start devmon: " + e);
-        }
+        // Start the devmon thread (run in a separate executor since it will run until the program terminates.)
+        monitorJob = Exec.execConsumingLines(new DevMonParser(),
+                stderrLine -> System.out.println("stderr output when attempting to start devmon: " + stderrLine), //
+                "devmon");
+
+        // Mount all (otherwise manually-unmounted drives that are plugged in on start will stay unmounted)
+        mountAll();
     }
 
     private static final Map<String, DriveInfo> partitionDeviceToDriveInfo = new ConcurrentHashMap<>();
@@ -67,8 +64,6 @@ public class DiskMonitor {
     private static final Set<DrivesChangedListener> drivesChangedListeners = new HashSet<>();
 
     private static final Object drivesChangedListnerLock = new Object();
-
-    static final TaskExecutor taskExecutor = new TaskExecutor();
 
     public interface DrivesChangedListener {
         public void drivesChanged(List<DriveInfo> currDrives);
@@ -107,7 +102,9 @@ public class DiskMonitor {
         // Call df to get drive sizes (updated asynchronously)
         driveInfo.diskSize = -1L;
         driveInfo.diskSpaceUsed = -1L;
-        driveInfo.updateDriveSizes(); // Calls drivesChanged() if successful
+        driveInfo.updateDriveSizesAsync(); // Calls drivesChanged() if successful
+
+        driveInfo.clearListing();
 
         System.out.println("Drive mounted: " + driveInfo);
     }
@@ -122,6 +119,9 @@ public class DiskMonitor {
         driveInfo.isMounted = false;
         driveInfo.diskSize = -1L;
         driveInfo.diskSpaceUsed = -1L;
+
+        driveInfo.clearListing();
+
         drivesChanged();
 
         System.out.println("Drive unplugged: " + driveInfo);
@@ -132,6 +132,9 @@ public class DiskMonitor {
         DriveInfo driveInfo = getOrCreateDriveInfo(partitionDevice);
         driveInfo.isMounted = false;
         driveInfo.mountPoint = "";
+
+        driveInfo.clearListing();
+
         // Leave diskSize and diskSpaceUsed with the values they had before drive was unmounted,
         // so that drive can be unmounted after a copy (to prevent the dirty bit being set if the
         // drive is unplugged), but sizes can still be shown.
@@ -147,29 +150,20 @@ public class DiskMonitor {
     }
 
     public static void sync() {
-        try {
-            Command.command("sync");
-        } catch (InterruptedException | CommandException e) {
-            System.out.println("Could not sync: " + e);
-        }
+        Exec.execWithTaskOutputSynchronous("sync");
     }
 
     public static void unmountAll() {
-        try {
-            Command.command("sudo", "devmon", "--unmount-all");
-        } catch (CommandException e) {
-            System.out.println("Could not unmount all drives: " + e);
-        } catch (InterruptedException | CancellationException e) {
+        TaskOutput taskOutput = Exec.execWithTaskOutputSynchronous("devmon", "--unmount-all");
+        if (taskOutput.exitCode != 0) {
+            System.out.println("Could not unmount all drives: " + taskOutput.stderr);
         }
     }
 
     public static void mountAll() {
-        try {
-            Command.command("sudo", "-u", "pi", "devmon", "--mount-all");
-        } catch (CommandException e) {
-            // Ignore -- for some reason this always returns exit code 3
-            // https://github.com/IgnorantGuru/udevil/issues/100
-        } catch (InterruptedException | CancellationException e) {
+        TaskOutput taskOutput = Exec.execWithTaskOutputSynchronous("devmon", "--mount-all");
+        if (taskOutput.exitCode != 0) {
+            System.out.println("Could not unmount all drives: " + taskOutput.stderr);
         }
     }
 
@@ -218,12 +212,9 @@ public class DiskMonitor {
 
     public static void shutdown() {
         // Shut down devmon process
-        monitorJob.cancel();
+        monitorJob.cancel(true);
 
         // Clear listener list
         drivesChangedListeners.clear();
-
-        monitoringExecutor.shutdown();
-        taskExecutor.shutdown();
     }
 }

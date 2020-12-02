@@ -103,6 +103,7 @@ class DevMonParser implements Consumer<String> {
                 String key = fieldMatcher.group(2);
                 String val = fieldMatcher.group(3);
 
+                // System.out.println(line);
                 if (!isIndented) {
                     // First line is not indented
                     if (key.equals("device")) {

@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import aobtk.font.Font;
@@ -48,10 +49,7 @@ import aobtk.ui.element.TextElement;
 import aobtk.ui.element.VLayout;
 import aobtk.ui.element.VLayout.VAlign;
 import aobtk.ui.screen.Screen;
-import aobtk.util.Command;
-import aobtk.util.Command.CommandException;
-import aobtk.util.TaskExecutor;
-import aobtk.util.TaskExecutor.TaskResult;
+import exec.Exec;
 import i18n.Msg;
 import main.Main;
 import util.DiskMonitor;
@@ -62,8 +60,7 @@ public class DoCopyScreen extends Screen {
     private volatile List<DriveInfo> otherDrives;
     private final List<ProgressBar> progressBars;
 
-    private TaskExecutor[] taskExecutors;
-    private List<TaskResult<Integer>> rsyncTaskResults;
+    private List<Future<Integer>> rsyncFutures;
     private final AtomicBoolean canceled = new AtomicBoolean(false);
 
     public DoCopyScreen(Screen parentScreen, DriveInfo selectedDrive, int numFiles, List<DriveInfo> otherDrives) {
@@ -96,57 +93,47 @@ public class DoCopyScreen extends Screen {
 
     @Override
     public void open() {
-        taskExecutors = new TaskExecutor[otherDrives.size()];
-        rsyncTaskResults = new ArrayList<>(otherDrives.size());
+        rsyncFutures = new ArrayList<>(otherDrives.size());
         AtomicBoolean succeeded = new AtomicBoolean(true);
         for (int i = 0; i < otherDrives.size(); i++) {
             DriveInfo otherDrive = otherDrives.get(i);
             ProgressBar progressBar = progressBars.get(i);
 
-            // Spawn a separate rsync task per drive, each in a separate TaskExecutor (since TaskExecutor
-            // can only run one task at once). This parallelizes copying to multiple drives, which could
-            // load the USB hub pretty heavily, but it has the advantage of reusing the cache for the read
-            // files, assuming the destination drives have approximately the same write speed.
-            taskExecutors[i] = new TaskExecutor();
-            try {
-                TaskResult<Integer> commandResult = Command.commandWithConsumer(
-                        new String[] { "rsync", "-rlptv", "--info=progress2",
-                                // End source dir in "/" to copy contents of dir, not dir itself
-                                selectedDrive.mountPoint + "/ ", //
-                                otherDrive.mountPoint }, //
-                        taskExecutors[i], /* consumeStderr = */ false, progressLine -> {
-                            // Get progress percentage for rsync transfer
-                            try {
-                                StringTokenizer tok = new StringTokenizer(progressLine);
-                                tok.nextToken();
-                                String percentage = tok.nextToken();
-                                if (percentage.endsWith("%")) {
-                                    try {
-                                        int percentageInt = Integer
-                                                .parseInt(percentage.substring(0, percentage.length() - 1));
-                                        if (percentageInt >= 0 && percentageInt <= 100) {
-                                            // Update progress bar with rsync progress percentage
-                                            // but use 105 as the denominator, since there's still
-                                            // some work to do at the end of copy to sync and unmount
-                                            progressBar.setProgress(percentageInt, 105);
-                                            repaint();
-                                        }
-                                    } catch (NumberFormatException e) {
-                                    }
-                                }
-                            } catch (NoSuchElementException e) {
+            // Spawn a separate rsync task per drive. This parallelizes copying to multiple drives,
+            // which could load the USB bus pretty heavily, but it has the advantage of reusing the
+            // cache, assuming the destination drives have approximately the same write speed.
+            rsyncFutures.add(Exec.execConsumingLines(progressLine -> {
+                // Get progress percentage for rsync transfer
+                try {
+                    StringTokenizer tok = new StringTokenizer(progressLine);
+                    tok.nextToken();
+                    String percentage = tok.nextToken();
+                    if (percentage.endsWith("%")) {
+                        try {
+                            int percentageInt = Integer.parseInt(percentage.substring(0, percentage.length() - 1));
+                            if (percentageInt >= 0 && percentageInt <= 100) {
+                                // Update progress bar with rsync progress percentage
+                                // but use 105 as the denominator, since there's still
+                                // some work to do at the end of copy to sync and unmount
+                                progressBar.setProgress(percentageInt, 105);
+                                repaint();
                             }
-                        });
-                rsyncTaskResults.add(commandResult);
-            } catch (CommandException e) {
-                e.printStackTrace();
-                succeeded.set(false);
-            }
+                        } catch (NumberFormatException e) {
+                            // Ignore invalid lines
+                        }
+                    }
+                } catch (NoSuchElementException e) {
+                    // Line is empty
+                }
+            }, "rsync", "-rlptv", "--info=progress2",
+                    // End source dir in "/" to copy contents of dir, not dir itself
+                    selectedDrive.mountPoint + "/ ", //
+                    otherDrive.mountPoint));
         }
 
         // Wait for all rsync tasks to terminate
-        taskExecutor.submit(() -> {
-            for (TaskResult<Integer> result : rsyncTaskResults) {
+        Exec.executor.submit(() -> {
+            for (Future<Integer> result : rsyncFutures) {
                 try {
                     // Wait for copy operation to complete
                     Integer resultCode = result.get();
@@ -191,11 +178,7 @@ public class DoCopyScreen extends Screen {
 
     private void stopCopying() {
         for (int i = 0; i < otherDrives.size(); i++) {
-            rsyncTaskResults.get(i).cancel();
-            if (taskExecutors[i] != null) {
-                taskExecutors[i].shutdown();
-                taskExecutors[i] = null;
-            }
+            rsyncFutures.get(i).cancel(true);
         }
 
         DiskMonitor.sync();
@@ -203,8 +186,8 @@ public class DoCopyScreen extends Screen {
         for (int i = 0; i < otherDrives.size(); i++) {
             // Update drive size info
             DriveInfo driveInfo = otherDrives.get(i);
-            driveInfo.updateDriveSizes();
-            
+            driveInfo.updateDriveSizesAsync();
+
             // Unmount so the drives can be pulled out without setting the dirty bit
             try {
                 driveInfo.clearListing();

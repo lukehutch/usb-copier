@@ -34,6 +34,7 @@ package screen;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 import aobtk.font.Font;
 import aobtk.font.FontStyle.Highlight;
@@ -44,9 +45,7 @@ import aobtk.ui.element.TextElement;
 import aobtk.ui.element.VLayout;
 import aobtk.ui.element.VLayout.VAlign;
 import aobtk.ui.screen.Screen;
-import aobtk.util.Command;
-import aobtk.util.Command.CommandException;
-import aobtk.util.TaskExecutor.TaskResult;
+import exec.Exec;
 import i18n.Msg;
 import main.Main;
 import util.DriveInfo;
@@ -57,7 +56,7 @@ public class CopyScreen extends DrivesChangedListenerScreen {
     private volatile List<DriveInfo> otherDrives;
     private volatile int numFiles;
 
-    private TaskResult<Void> setupTask;
+    private Future<?> setupTask;
 
     public CopyScreen(Screen parentScreen, DriveInfo selectedDrive) {
         super(parentScreen);
@@ -88,28 +87,19 @@ public class CopyScreen extends DrivesChangedListenerScreen {
 
         if (setupTask != null) {
             // Still working on previous task -- cancel it
-            setupTask.cancel();
+            setupTask.cancel(true);
         }
 
-        setupTask = taskExecutor.submit(() -> {
+        setupTask = Exec.executor.submit(() -> {
             // Check if drive is mounted, and if not, mount it
             if (!selectedDrive.isMounted()) {
-                int mountResultCode;
                 try {
-                    mountResultCode = Command.commandWithConsumer(
-                            new String[] { "sudo", "udisksctl", "mount", "--no-user-interaction", "-b",
-                                    selectedDrive.partitionDevice },
-                            /* consumeStdErr = */ true, System.out::println).get();
-                } catch (CommandException | ExecutionException e) {
-                    e.printStackTrace();
-                    mountResultCode = 1;
-                }
-                if (mountResultCode != 0) {
+                    selectedDrive.mount();
+                } catch (ExecutionException | InterruptedException e) {
                     // Disk was not successfully mounted
-                    System.out.println("Could not mount disk " + selectedDrive.partitionDevice);
                     setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(), Msg.ERROR)));
                     waitThenGoToParentScreen(3000);
-                    throw new IllegalArgumentException("Failed to mount drive");
+                    throw new IllegalArgumentException("Failed to mount drive " + selectedDrive.partitionDevice, e);
                 }
             }
 
@@ -186,13 +176,13 @@ public class CopyScreen extends DrivesChangedListenerScreen {
         if (button == HWButton.A) {
             // Cancel file listing operation, if it hasn't finished yet
             if (selectedDrive != null) {
-                TaskResult<List<FileInfo>> getFileListTask = selectedDrive.getFileListTask();
+                Future<List<FileInfo>> getFileListTask = selectedDrive.getFileListTask();
                 if (getFileListTask != null) {
-                    getFileListTask.cancel();
+                    getFileListTask.cancel(true);
                 }
             }
             if (setupTask != null) {
-                setupTask.cancel();
+                setupTask.cancel(true);
             }
 
             // Move up to parent screen

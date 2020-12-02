@@ -31,8 +31,10 @@
  */
 package screen;
 
+import java.io.IOException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 import aobtk.hw.HWButton;
 import aobtk.i18n.Str;
@@ -41,9 +43,8 @@ import aobtk.ui.element.ProgressBar;
 import aobtk.ui.element.TextElement;
 import aobtk.ui.element.VLayout;
 import aobtk.ui.screen.Screen;
-import aobtk.util.Command;
-import aobtk.util.Command.CommandException;
-import aobtk.util.TaskExecutor.TaskResult;
+import exec.Exec;
+import exec.Exec.TaskOutput;
 import i18n.Msg;
 import main.Main;
 import util.DiskMonitor;
@@ -56,7 +57,7 @@ public class DoWipeScreen extends Screen {
 
     private volatile ProgressBar progressBar;
 
-    private volatile TaskResult<Integer> ddCommandTask;
+    private volatile Future<Integer> ddCommandTask;
 
     private void exceptionThrown(Exception e) {
         e.printStackTrace();
@@ -74,27 +75,26 @@ public class DoWipeScreen extends Screen {
         }
     }
 
-    private void mkfs() throws CommandException, InterruptedException, CancellationException {
+    private TaskOutput mkfs() {
         // Format partition as vfat
-        Command.command(new String[] { "sudo", "/sbin/mkfs.vfat", "-F32", selectedDrive.partitionDevice });
+        return Exec.execWithTaskOutputSynchronous(
+                new String[] { "/sbin/mkfs.vfat", "-F32", selectedDrive.partitionDevice });
     }
 
-    private TaskResult<Integer> ddWipe(DriveInfo selectedDrive) throws CommandException {
-        return Command.commandWithConsumer(new String[] { "sudo", "dd", "if=/dev/zero",
-                "of=" + selectedDrive.partitionDevice, "bs=4096", "status=progress" }, /* consumeStderr = */ true,
-                line -> {
-                    if (!line.isEmpty() && !line.contains("records in")) {
-                        // Show progress percentage
-                        int spaceIdx = line.indexOf(' ');
-                        if (spaceIdx < 0) {
-                            spaceIdx = line.length();
-                        }
-                        long bytesProcessed = Long.parseLong(line.substring(0, spaceIdx));
-                        int percent = (int) ((bytesProcessed * 100.0f) / selectedDrive.diskSize + 0.5f);
-                        progressBar.setProgress(percent, 100);
-                        repaint();
-                    }
-                });
+    private Future<Integer> ddWipe(DriveInfo selectedDrive) {
+        return Exec.execConsumingLines(line -> {
+            if (!line.isEmpty() && !line.contains("records in")) {
+                // Show progress percentage
+                int spaceIdx = line.indexOf(' ');
+                if (spaceIdx < 0) {
+                    spaceIdx = line.length();
+                }
+                long bytesProcessed = Long.parseLong(line.substring(0, spaceIdx));
+                int percent = (int) ((bytesProcessed * 100.0f) / selectedDrive.diskSize + 0.5f);
+                progressBar.setProgress(percent, 100);
+                repaint();
+            }
+        }, "dd", "if=/dev/zero", "of=" + selectedDrive.partitionDevice, "bs=4096", "status=progress");
     }
 
     public DoWipeScreen(Screen parentScreen, DriveInfo selectedDrive, boolean isQuick) {
@@ -118,7 +118,7 @@ public class DoWipeScreen extends Screen {
     @Override
     public void open() {
         // Run the wipe in a different thread, so the status line can update as the wipe proceeds
-        taskExecutor.submit(() -> {
+        Exec.executor.submit(() -> {
             boolean canceled = false;
 
             progressBar.setProgress(0, 100);
@@ -153,12 +153,12 @@ public class DoWipeScreen extends Screen {
                     // Set ref to null so that A-button doesn't try to cancel it again
                     ddCommandTask = null;
                     if (ddCommandExitCode != 0) {
-                        throw new CommandException("dd returned non-zero exit code " + ddCommandExitCode);
+                        throw new IOException("dd returned non-zero exit code " + ddCommandExitCode);
                     }
 
-                } catch (CommandException | ExecutionException e2) {
+                } catch (IOException | ExecutionException e) {
                     System.out.println("dd failed");
-                    e2.printStackTrace();
+                    e.printStackTrace();
                     // dd failed, but fall through and try mkfs anyway 
 
                 } catch (InterruptedException | CancellationException e3) {
@@ -172,18 +172,11 @@ public class DoWipeScreen extends Screen {
                 repaint();
             }
 
-            // Make the filesystem
-            try {
-                // Format the partition (whether or not low-level format was canceled)
-                mkfs();
-
-            } catch (CommandException e) {
-                // Error occurred during mkfs
-                e.printStackTrace();
-                // Fall through, and try sync and remount
-
-            } catch (InterruptedException | CancellationException e) {
-                canceled = true;
+            // Format the partition (whether or not low-level format was canceled)
+            TaskOutput mkfsResult = mkfs();
+            if (mkfsResult.exitCode != 0) {
+                System.out.println(
+                        "mkfs returned non-zero exit code " + mkfsResult.exitCode + ": " + mkfsResult.stderr);
             }
 
             // sync
@@ -243,7 +236,7 @@ public class DoWipeScreen extends Screen {
             // Allow low-level wipe to be canceled
             if (ddCommandTask != null) {
                 System.out.println("Canceling dd task");
-                ddCommandTask.cancel();
+                ddCommandTask.cancel(true);
                 // Prevent double attempt to cancel
                 ddCommandTask = null;
                 // Show canceled text

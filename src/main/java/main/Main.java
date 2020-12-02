@@ -38,7 +38,9 @@ import java.util.logging.Logger;
 import aobtk.font.Font;
 import aobtk.hw.Bonnet;
 import aobtk.ui.screen.Screen;
+import exec.Exec;
 import screen.ChooseLangScreen;
+import sun.misc.Signal;
 import util.DiskMonitor;
 
 public class Main {
@@ -64,6 +66,8 @@ public class Main {
     }
 
     public static void main(String[] args) throws Exception {
+        Exec.prependCommand = new String[] { "sudo", "-u", "pi" };
+
         // Start by immediately displaying a "Please Wait" screen
         // (it takes time to load the fonts, start the disk monitor, etc.)
         Bonnet.display.setFromBitBuffer(SavePleaseWaitScreen.getSavedBitBuffer());
@@ -78,9 +82,14 @@ public class Main {
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
-                // Stop monitoring for changes in plugged drives
-                DiskMonitor.shutdown();
+                System.out.println("Main shutdown hook");
+                shutdown();
             }
+        });
+
+        Signal.handle(new Signal("INT"), signal -> {
+            shutdown();
+            System.exit(0);
         });
 
         // Keep program running until termination
@@ -88,11 +97,17 @@ public class Main {
             try {
                 Thread.sleep(1000_000);
             } catch (InterruptedException e) {
-                // You can also kill the program by interrupting the main thread
-                // (not currently used)
-                System.out.println("Main thread was interrupted -- shutting down");
-                Bonnet.shutdown();
+                break;
             }
         }
+    }
+
+    public static void shutdown() {
+        // Shut down all task executors
+        Exec.shutdown();
+        // Stop monitoring for changes in plugged drives
+        DiskMonitor.shutdown();
+        // Shut down hardware
+        Bonnet.shutdown();
     }
 }
