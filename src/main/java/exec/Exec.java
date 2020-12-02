@@ -19,7 +19,7 @@ import java.util.function.Consumer;
 
 public class Exec {
 
-    public static String[] prependCommand = null; // e.g. { "sudo", "-u", "pi" };
+    public static String[] prependCommand = { "sudo", "-u", "pi" };
 
     /** Start new threads in daemon mode so they are killed when JVM tries to shut down. */
     public static ExecutorService executor = Executors.newCachedThreadPool(r -> {
@@ -155,7 +155,7 @@ public class Exec {
                 cancel.run();
                 exception = e;
             }
-            if (stderrProcessorFuture != null) {
+            if (stderrProcessorFuture.get() != null) {
                 try {
                     stderrProcessorFuture.get().get();
                 } catch (InterruptedException | CancellationException | ExecutionException e) {
@@ -167,9 +167,9 @@ public class Exec {
                     }
                 }
             }
-            if (stdoutProcessorFuture != null) {
+            if (stdoutProcessorFuture.get() != null) {
                 try {
-                    stderrProcessorFuture.get().get();
+                    stdoutProcessorFuture.get().get();
                 } catch (InterruptedException | CancellationException | ExecutionException e) {
                     cancel.run();
                     if (exception == null) {

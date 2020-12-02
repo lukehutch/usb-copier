@@ -77,11 +77,12 @@ public class DoWipeScreen extends Screen {
 
     private TaskOutput mkfs() {
         // Format partition as vfat
-        return Exec.execWithTaskOutputSynchronous(
-                new String[] { "/sbin/mkfs.vfat", "-F32", selectedDrive.partitionDevice });
+        System.out.println("Formatting as vfat: " + selectedDrive.partitionDevice);
+        return Exec.execWithTaskOutputSynchronous("/sbin/mkfs.vfat", "-F32", selectedDrive.partitionDevice);
     }
 
     private Future<Integer> ddWipe(DriveInfo selectedDrive) {
+        System.out.println("Performing deep wipe: " + selectedDrive.partitionDevice);
         return Exec.execConsumingLines(line -> {
             if (!line.isEmpty() && !line.contains("records in")) {
                 // Show progress percentage
@@ -130,11 +131,10 @@ public class DoWipeScreen extends Screen {
                 return;
             }
 
-            // First check if drive is originally even mounted (this allows non-mounted drives to be formatted,
-            // which is important if a drive needs to be formatted after a previous format failed).
-            if (!selectedDrive.isMounted()) {
+            // Unmount drive if it is mounted
+            if (selectedDrive.isMounted()) {
                 try {
-                    selectedDrive.mount();
+                    selectedDrive.unmount();
 
                 } catch (Exception e) {
                     exceptionThrown(e);
@@ -157,9 +157,8 @@ public class DoWipeScreen extends Screen {
                     }
 
                 } catch (IOException | ExecutionException e) {
-                    System.out.println("dd failed");
-                    e.printStackTrace();
-                    // dd failed, but fall through and try mkfs anyway 
+                    // dd failed
+                    exceptionThrown(e);
 
                 } catch (InterruptedException | CancellationException e3) {
                     // Operation was cancelled, and child dd process was killed by Command.commandWithConsumer()
@@ -182,10 +181,10 @@ public class DoWipeScreen extends Screen {
             // sync
             DiskMonitor.sync();
 
-            // Remount drive
+            // Mount drive
             try {
                 // Remount the partition
-                selectedDrive.remount();
+                selectedDrive.mount();
 
             } catch (InterruptedException | CancellationException e) {
                 canceled = true;

@@ -107,7 +107,7 @@ public class DriveInfo implements Comparable<DriveInfo> {
                                         throw new IOException("Could not list files: " + taskOutput.stderr);
                                     } else {
                                         Path dir = Paths.get(mountPoint);
-                                        System.out.println("Scanning files for mount point: " + dir);
+                                        System.out.println("Listing files in: " + dir);
                                         boolean canRead = dir.toFile().canRead();
                                         if (!canRead) {
                                             throw new IOException("Cannot read dir: " + dir);
@@ -164,8 +164,8 @@ public class DriveInfo implements Comparable<DriveInfo> {
             if (taskOutput.exitCode != 0) {
                 System.out.println("Bad exit code " + taskOutput.exitCode + " from df: " + taskOutput.stderr);
             } else {
-                String err = taskOutput.stdout;
-                String[] lines = err.split("\n");
+                String stdout = taskOutput.stdout;
+                String[] lines = stdout.split("\n");
                 if (lines.length == 2) {
                     String line = lines[1];
                     // System.out.println(line);
@@ -183,10 +183,10 @@ public class DriveInfo implements Comparable<DriveInfo> {
                     }
                     DiskMonitor.drivesChanged();
                 } else {
-                    if (err.length() > 0 && err.charAt(err.length() - 1) == '\n') {
-                        err = err.substring(0, err.length() - 1);
+                    if (stdout.length() > 0 && stdout.charAt(stdout.length() - 1) == '\n') {
+                        stdout = stdout.substring(0, stdout.length() - 1);
                     }
-                    System.out.println("Got bad output from df:\n" + err);
+                    System.out.println("Got bad output from df:\n" + stdout);
                 }
             }
         });

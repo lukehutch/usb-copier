@@ -91,6 +91,8 @@ public class DiskMonitor {
     /** Drive is mounted and drive metadata has been read. */
     static void driveMounted(String partitionDevice, String mountPoint, String label) {
         DriveInfo driveInfo = getOrCreateDriveInfo(partitionDevice);
+        System.out.println("Drive mounted: " + driveInfo);
+
         driveInfo.mountPoint = mountPoint;
         driveInfo.label = label;
         driveInfo.isPluggedIn = true;
@@ -106,13 +108,13 @@ public class DiskMonitor {
         driveInfo.diskSize = -1L;
         driveInfo.diskSpaceUsed = -1L;
         driveInfo.updateDriveSizesAsync();
-
-        System.out.println("Drive mounted: " + driveInfo);
     }
 
     /** Drive was unplugged */
     static void driveUnplugged(String partitionDevice) {
         DriveInfo driveInfo = getOrCreateDriveInfo(partitionDevice);
+        System.out.println("Drive unplugged: " + driveInfo);
+
         driveInfo.mountPoint = "";
         driveInfo.label = "";
         driveInfo.port = 0;
@@ -126,13 +128,13 @@ public class DiskMonitor {
         driveInfo.clearListing();
 
         drivesChanged();
-
-        System.out.println("Drive unplugged: " + driveInfo);
     }
 
     /** Drive was unmounted */
     static void driveUnmounted(String partitionDevice) {
         DriveInfo driveInfo = getOrCreateDriveInfo(partitionDevice);
+        System.out.println("Drive unmounted: " + driveInfo);
+
         driveInfo.isMounted = false;
         driveInfo.mountPoint = "";
 
@@ -143,8 +145,6 @@ public class DiskMonitor {
         driveInfo.clearListing();
 
         drivesChanged();
-
-        System.out.println("Drive unmounted: " + driveInfo);
     }
 
     public static void remountAll() {
@@ -181,7 +181,7 @@ public class DiskMonitor {
             // Pick the biggest partition for each drive, and skip drives that are not currently mounted
             Set<String> partitionAlreadyAdded = new HashSet<>();
             List<DriveInfo> newDriveListFiltered = new ArrayList<>(newDriveList.size());
-            System.out.println("Drives changed:");
+            System.out.println("\nDrives changed:");
             for (DriveInfo di : newDriveList) {
                 System.out.println("  Drive: " + di.partitionDevice);
                 // Only add drives that are plugged in
@@ -193,6 +193,7 @@ public class DiskMonitor {
                     }
                 }
             }
+            System.out.println();
 
             // Copy over cached file list and size information from items in old list if available,
             // to prevent having to repeat this work. This is O(N^2), but N should be small.
