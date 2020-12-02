@@ -19,7 +19,7 @@ import java.util.function.Consumer;
 
 public class Exec {
 
-    public static String[] prependCommand = { "sudo", "-u", "pi" };
+    public static String[] prependCommand = { "sudo" };
 
     /** Start new threads in daemon mode so they are killed when JVM tries to shut down. */
     public static ExecutorService executor = Executors.newCachedThreadPool(r -> {
@@ -39,18 +39,6 @@ public class Exec {
 
     // -------------------------------------------------------------------------------------------------------------
 
-    private static String readAll(InputStream inputStream) throws IOException {
-        ByteArrayOutputStream result = new ByteArrayOutputStream();
-        byte[] buffer = new byte[1024];
-        int length;
-        while ((length = inputStream.read(buffer)) != -1) {
-            result.write(buffer, 0, length);
-        }
-        return result.toString(StandardCharsets.UTF_8);
-    }
-
-    // -------------------------------------------------------------------------------------------------------------
-
     @FunctionalInterface
     public static interface ConsumerThrowingIOException<T> {
         public void accept(T val) throws IOException;
@@ -66,6 +54,8 @@ public class Exec {
         } else {
             cmd = cmdAndArgs;
         }
+
+        System.out.println("CMD: " + String.join(" ", cmd));
 
         Future<Process> processFuture = executor.submit(() -> Runtime.getRuntime().exec(cmd));
 
@@ -198,15 +188,19 @@ public class Exec {
 
     // -------------------------------------------------------------------------------------------------------------
 
+    private static void produceLines(InputStream inputStream, Consumer<String> lineConsumer) throws IOException {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+            for (String line; (line = reader.readLine()) != null;) {
+                lineConsumer.accept(line);
+            }
+        }
+    }
+
     public static Future<Integer> execConsumingLines(Consumer<String> stdoutLineConsumer,
             Consumer<String> stderrLineConsumer, String... cmdAndArgs) {
         return exec(
-                stdoutLineConsumer == null ? null
-                        : stdoutStream -> new BufferedReader(new InputStreamReader(stdoutStream)).lines()
-                                .forEach(stdoutLineConsumer),
-                stderrLineConsumer == null ? null
-                        : stderrStream -> new BufferedReader(new InputStreamReader(stderrStream)).lines()
-                                .forEach(stderrLineConsumer),
+                stdoutLineConsumer == null ? null : stdoutStream -> produceLines(stdoutStream, stdoutLineConsumer),
+                stderrLineConsumer == null ? null : stderrStream -> produceLines(stderrStream, stderrLineConsumer),
                 cmdAndArgs);
     }
 
@@ -215,6 +209,16 @@ public class Exec {
     }
 
     // -------------------------------------------------------------------------------------------------------------
+
+    private static String readAll(InputStream inputStream) throws IOException {
+        ByteArrayOutputStream result = new ByteArrayOutputStream();
+        byte[] buffer = new byte[1024];
+        int length;
+        while ((length = inputStream.read(buffer)) != -1) {
+            result.write(buffer, 0, length);
+        }
+        return result.toString(StandardCharsets.UTF_8);
+    }
 
     public static Future<Integer> execConsumingOutput(Consumer<String> stdoutConsumer,
             Consumer<String> stderrConsumer, String... cmdAndArgs) {

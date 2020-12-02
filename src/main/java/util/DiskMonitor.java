@@ -107,7 +107,7 @@ public class DiskMonitor {
         // Calls DiskMonitor.drivesChanged() only if successful.
         driveInfo.diskSize = -1L;
         driveInfo.diskSpaceUsed = -1L;
-        driveInfo.updateDriveSizesAsync();
+        driveInfo.updateDriveSizeAsync();
     }
 
     /** Drive was unplugged */

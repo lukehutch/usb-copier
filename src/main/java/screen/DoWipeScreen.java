@@ -32,7 +32,9 @@
 package screen;
 
 import java.io.IOException;
+import java.util.Queue;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
@@ -59,6 +61,8 @@ public class DoWipeScreen extends Screen {
 
     private volatile Future<Integer> ddCommandTask;
 
+    private Queue<String> ddStderrLines = new ConcurrentLinkedDeque<>();
+
     private void exceptionThrown(Exception e) {
         e.printStackTrace();
         setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(), Msg.ERROR)));
@@ -78,24 +82,29 @@ public class DoWipeScreen extends Screen {
     private TaskOutput mkfs() {
         // Format partition as vfat
         System.out.println("Formatting as vfat: " + selectedDrive.partitionDevice);
-        return Exec.execWithTaskOutputSynchronous("/sbin/mkfs.vfat", "-F32", selectedDrive.partitionDevice);
+        // Expands to "sudo -u pi sudo /sbin/mkfs.vfat ...", which will undo the "sudo -u pi" part
+        return Exec.execWithTaskOutputSynchronous("sudo", "/sbin/mkfs.vfat", "-F32", selectedDrive.partitionDevice);
     }
 
     private Future<Integer> ddWipe(DriveInfo selectedDrive) {
         System.out.println("Performing deep wipe: " + selectedDrive.partitionDevice);
-        return Exec.execConsumingLines(line -> {
-            if (!line.isEmpty() && !line.contains("records in")) {
+        ddStderrLines.clear();
+        return Exec.execConsumingLines(null, stderrLine -> {
+            ddStderrLines.add(stderrLine);
+            if (!stderrLine.isEmpty() && !stderrLine.contains("records in")) {
                 // Show progress percentage
-                int spaceIdx = line.indexOf(' ');
+                int spaceIdx = stderrLine.indexOf(' ');
                 if (spaceIdx < 0) {
-                    spaceIdx = line.length();
+                    spaceIdx = stderrLine.length();
                 }
-                long bytesProcessed = Long.parseLong(line.substring(0, spaceIdx));
+                long bytesProcessed = Long.parseLong(stderrLine.substring(0, spaceIdx));
                 int percent = (int) ((bytesProcessed * 100.0f) / selectedDrive.diskSize + 0.5f);
                 progressBar.setProgress(percent, 100);
                 repaint();
             }
-        }, "dd", "if=/dev/zero", "of=" + selectedDrive.partitionDevice, "bs=4096", "status=progress");
+        },
+                // Expands to "sudo -u pi sudo dd ...", which will undo the "sudo -u pi" part
+                "sudo", "dd", "if=/dev/zero", "of=" + selectedDrive.partitionDevice, "bs=4096", "status=progress");
     }
 
     public DoWipeScreen(Screen parentScreen, DriveInfo selectedDrive, boolean isQuick) {
@@ -131,16 +140,16 @@ public class DoWipeScreen extends Screen {
                 return;
             }
 
-            // Unmount drive if it is mounted
-            if (selectedDrive.isMounted()) {
-                try {
-                    selectedDrive.unmount();
-
-                } catch (Exception e) {
-                    exceptionThrown(e);
-                    return;
-                }
+            // Unmount drive first, if mounted
+            try {
+                selectedDrive.unmount();
+            } catch (Exception e) {
+                exceptionThrown(e);
+                return;
             }
+
+            // Clear the partition listing
+            selectedDrive.clearListing();
 
             // Deep-wipe the partition using dd if requested
             if (!isQuick) {
@@ -153,12 +162,14 @@ public class DoWipeScreen extends Screen {
                     // Set ref to null so that A-button doesn't try to cancel it again
                     ddCommandTask = null;
                     if (ddCommandExitCode != 0) {
-                        throw new IOException("dd returned non-zero exit code " + ddCommandExitCode);
+                        throw new IOException("dd returned non-zero exit code " + ddCommandExitCode + ": "
+                                + String.join("\n", ddStderrLines));
                     }
 
                 } catch (IOException | ExecutionException e) {
                     // dd failed
                     exceptionThrown(e);
+                    return;
 
                 } catch (InterruptedException | CancellationException e3) {
                     // Operation was cancelled, and child dd process was killed by Command.commandWithConsumer()
@@ -183,7 +194,7 @@ public class DoWipeScreen extends Screen {
 
             // Mount drive
             try {
-                // Remount the partition
+                // Remount the partition and read the filesystem size
                 selectedDrive.mount();
 
             } catch (InterruptedException | CancellationException e) {
@@ -194,10 +205,6 @@ public class DoWipeScreen extends Screen {
                 exceptionThrown(e);
                 return;
             }
-
-            // Mark the partition as changed now that the drive is remounted
-            selectedDrive.clearListing();
-            selectedDrive.updateDriveSizesAsync();
 
             // Finished -- briefly show 100% progress at end of job
             progressBar.setProgress(100, 100);

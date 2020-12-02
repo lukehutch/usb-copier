@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -125,9 +126,10 @@ public class DoCopyScreen extends Screen {
                 } catch (NoSuchElementException e) {
                     // Line is empty
                 }
-            }, "rsync", "-rlptv", "--info=progress2",
+            }, stderrLine -> System.out.println("rsync stderr line: " + stderrLine), //
+                    "rsync", "-rlptv", "--info=progress2",
                     // End source dir in "/" to copy contents of dir, not dir itself
-                    selectedDrive.mountPoint + "/ ", //
+                    selectedDrive.mountPoint + "/", //
                     otherDrive.mountPoint));
         }
 
@@ -137,12 +139,15 @@ public class DoCopyScreen extends Screen {
                 try {
                     // Wait for copy operation to complete
                     Integer resultCode = result.get();
-                    System.out.println("Got result code: " + resultCode);
                     if (resultCode != 0) {
+                        System.out.println("Copy failed with result code: " + resultCode);
                         succeeded.set(false);
                     }
-                } catch (InterruptedException | ExecutionException e) {
+                    System.out.println("Copy succeeded");
+
+                } catch (InterruptedException | CancellationException | ExecutionException e) {
                     // A copy operation failed
+                    System.out.println("Copy failed: " + e);
                     succeeded.set(false);
                 }
             }
@@ -186,12 +191,12 @@ public class DoCopyScreen extends Screen {
         for (int i = 0; i < otherDrives.size(); i++) {
             // Update drive size info
             DriveInfo driveInfo = otherDrives.get(i);
-            driveInfo.updateDriveSizesAsync();
+            driveInfo.updateDriveSizeAsync();
 
             // Unmount so the drives can be pulled out without setting the dirty bit
             try {
                 driveInfo.clearListing();
-                driveInfo.updateDriveSizesAsync();
+                driveInfo.updateDriveSizeAsync();
                 driveInfo.unmount();
             } catch (InterruptedException | ExecutionException e) {
                 e.printStackTrace();

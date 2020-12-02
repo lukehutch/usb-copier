@@ -92,19 +92,20 @@ public class CopyScreen extends DrivesChangedListenerScreen {
 
         setupTask = Exec.executor.submit(() -> {
             // Check if drive is mounted, and if not, mount it
-            if (!selectedDrive.isMounted()) {
-                try {
+            List<FileInfo> fileList;
+            try {
+                if (!selectedDrive.isMounted()) {
                     selectedDrive.mount();
-                } catch (ExecutionException | InterruptedException e) {
-                    // Disk was not successfully mounted
-                    setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(), Msg.ERROR)));
-                    waitThenGoToParentScreen(3000);
-                    throw new IllegalArgumentException("Failed to mount drive " + selectedDrive.partitionDevice, e);
                 }
+                fileList = selectedDrive.getFileListTask().get();
+            } catch (ExecutionException | InterruptedException e) {
+                // Disk was not successfully mounted
+                setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(), Msg.ERROR)));
+                waitThenGoToParentScreen(3000);
+                throw new IllegalArgumentException("Failed to mount drive " + selectedDrive.partitionDevice, e);
             }
 
             // Start the file listing task for the drive, and block on the result 
-            List<FileInfo> fileList = selectedDrive.getFileListTask().get();
             numFiles = fileList.size();
 
             if (!selectedDrive.isMounted() || fileList.isEmpty()) {
@@ -126,11 +127,11 @@ public class CopyScreen extends DrivesChangedListenerScreen {
             int row = 1;
             List<DriveInfo> _otherDrives = new ArrayList<>();
             for (DriveInfo di : driveInfoList) {
+                // Mount all drives
                 if (!di.isMounted()) {
-                    // Drive is not mounted -- an easy way to asynchronously mount it is to
-                    // fetch the used capacity
-                    di.getUsed();
-                } else if (!di.equals(selectedDrive)) {
+                    di.mount();
+                }
+                if (!di.equals(selectedDrive)) {
                     long diFree = di.getFree();
                     long insufficientSpace = Math.max(0, selectedDriveUsed - diFree);
                     String insufficientSpaceStr = insufficientSpace == 0L ? "--"

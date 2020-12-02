@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
@@ -95,11 +96,17 @@ public class DriveInfo implements Comparable<DriveInfo> {
             synchronized (fileListingLock) {
                 // Prevent race condition -- check fileListingFuture again inside synchronized block 
                 if (fileListingFuture == null) {
-                    if (mountPoint.isEmpty()) {
-                        // Drive is not mounted
-                        fileListingFuture = CompletableFuture
-                                .failedFuture(new IOException("Not mounted: " + partitionDevice));
-                    } else {
+                    if (!isMounted) {
+                        // If drive is not mounted for some reason, try mounting drive first
+                        try {
+                            mount();
+                        } catch (InterruptedException | ExecutionException e) {
+                            // Drive could not be mounted
+                            fileListingFuture = CompletableFuture
+                                    .failedFuture(new IOException("Not mounted: " + partitionDevice));
+                        }
+                    }
+                    if (fileListingFuture == null) {
                         fileListingFuture = Exec.thenMap(
                                 Exec.execWithTaskOutput("find", mountPoint, "-type", "f", "-printf", "%s\\t%P\\n"),
                                 taskOutput -> {
@@ -115,9 +122,12 @@ public class DriveInfo implements Comparable<DriveInfo> {
                                         List<FileInfo> fileListing = new ArrayList<>();
                                         for (String line : taskOutput.stdout.split("\n")) {
                                             int tabIdx = line.indexOf("\t");
-                                            fileListing.add(new FileInfo(Paths.get(line.substring(tabIdx + 1)),
-                                                    Long.parseLong(line.substring(0, tabIdx))));
+                                            if (tabIdx > 0) {
+                                                fileListing.add(new FileInfo(Paths.get(line.substring(tabIdx + 1)),
+                                                        Long.parseLong(line.substring(0, tabIdx))));
+                                            }
                                         }
+                                        Collections.sort(fileListing);
                                         return fileListing;
                                     }
                                 });
@@ -146,12 +156,10 @@ public class DriveInfo implements Comparable<DriveInfo> {
 
     public void unmount() throws InterruptedException, ExecutionException {
         Exec.execWithTaskOutputSynchronous("devmon", "--unmount", partitionDevice);
-        clearListing();
     }
 
     public void mount() throws InterruptedException, ExecutionException {
         Exec.execWithTaskOutputSynchronous("devmon", "--mount", partitionDevice);
-        updateDriveSizesAsync();
     }
 
     public void remount() throws InterruptedException, ExecutionException {
@@ -159,37 +167,40 @@ public class DriveInfo implements Comparable<DriveInfo> {
         mount();
     }
 
-    public void updateDriveSizesAsync() {
-        Exec.then(Exec.execWithTaskOutput("df", "-B", "1", partitionDevice), taskOutput -> {
-            if (taskOutput.exitCode != 0) {
-                System.out.println("Bad exit code " + taskOutput.exitCode + " from df: " + taskOutput.stderr);
-            } else {
-                String stdout = taskOutput.stdout;
-                String[] lines = stdout.split("\n");
-                if (lines.length == 2) {
-                    String line = lines[1];
-                    // System.out.println(line);
-                    if (line.startsWith(partitionDevice + " ") || line.startsWith(partitionDevice + "\t")) {
-                        try {
-                            StringTokenizer tok = new StringTokenizer(line);
-                            tok.nextToken();
-                            diskSize = Long.parseLong(tok.nextToken());
-                            diskSpaceUsed = Long.parseLong(tok.nextToken());
-                            System.out.println(
-                                    "Disk size for " + partitionDevice + " : " + diskSpaceUsed + " / " + diskSize);
-                        } catch (NumberFormatException | NoSuchElementException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                    DiskMonitor.drivesChanged();
+    public void updateDriveSizeAsync() {
+        // Only update drive size if drive is mounted
+        if (isMounted) {
+            Exec.then(Exec.execWithTaskOutput("df", "-B", "1", partitionDevice), taskOutput -> {
+                if (taskOutput.exitCode != 0) {
+                    System.out.println("Bad exit code " + taskOutput.exitCode + " from df: " + taskOutput.stderr);
                 } else {
-                    if (stdout.length() > 0 && stdout.charAt(stdout.length() - 1) == '\n') {
-                        stdout = stdout.substring(0, stdout.length() - 1);
+                    String stdout = taskOutput.stdout;
+                    String[] lines = stdout.split("\n");
+                    if (lines.length == 2) {
+                        String line = lines[1];
+                        // System.out.println(line);
+                        if (line.startsWith(partitionDevice + " ") || line.startsWith(partitionDevice + "\t")) {
+                            try {
+                                StringTokenizer tok = new StringTokenizer(line);
+                                tok.nextToken();
+                                diskSize = Long.parseLong(tok.nextToken());
+                                diskSpaceUsed = Long.parseLong(tok.nextToken());
+                                System.out.println("Disk size for " + partitionDevice + " : " + diskSpaceUsed
+                                        + " / " + diskSize);
+                            } catch (NumberFormatException | NoSuchElementException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                        DiskMonitor.drivesChanged();
+                    } else {
+                        if (stdout.length() > 0 && stdout.charAt(stdout.length() - 1) == '\n') {
+                            stdout = stdout.substring(0, stdout.length() - 1);
+                        }
+                        System.out.println("Got bad output from df:\n" + stdout);
                     }
-                    System.out.println("Got bad output from df:\n" + stdout);
                 }
-            }
-        });
+            });
+        }
     }
 
     public void clearListing() {
