@@ -1,6 +1,7 @@
 package exec;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -99,10 +100,13 @@ public class Exec {
         if (stdoutConsumer != null) {
             stdoutProcessorFuture.set(executor.submit(() -> {
                 try {
-                    InputStream inputStream = processFuture.get().getInputStream();
-                    if (inputStream != null) {
-                        // inputStream has not been redirected
-                        stdoutConsumer.accept(inputStream);
+                    InputStream stdoutStream = processFuture.get().getInputStream();
+                    if (stdoutStream != null) {
+                        // stdout has not been redirected
+                        stdoutConsumer.accept(stdoutStream);
+                    } else {
+                        System.err.println("stdout was redirected for command: " + String.join(" ", cmd));
+                        stdoutConsumer.accept(new ByteArrayInputStream(new byte[0]));
                     }
                     return null;
                 } catch (Exception e) {
@@ -115,10 +119,13 @@ public class Exec {
         if (stderrConsumer != null) {
             stderrProcessorFuture.set(executor.submit(() -> {
                 try {
-                    InputStream errorStream = processFuture.get().getErrorStream();
-                    if (errorStream != null) {
-                        // errorStream has not been redirected
-                        stderrConsumer.accept(errorStream);
+                    InputStream stderrStream = processFuture.get().getErrorStream();
+                    if (stderrStream != null) {
+                        // stderr has not been redirected
+                        stderrConsumer.accept(stderrStream);
+                    } else {
+                        System.err.println("stderr was redirected for command: " + String.join(" ", cmd));
+                        stderrConsumer.accept(new ByteArrayInputStream(new byte[0]));
                     }
                     return null;
                 } catch (Exception e) {
@@ -191,27 +198,27 @@ public class Exec {
 
     // -------------------------------------------------------------------------------------------------------------
 
-    public static Future<Integer> execConsumingLines(Consumer<String> stdinLineConsumer,
+    public static Future<Integer> execConsumingLines(Consumer<String> stdoutLineConsumer,
             Consumer<String> stderrLineConsumer, String... cmdAndArgs) {
         return exec(
-                stdinLineConsumer == null ? null
-                        : stdinStream -> new BufferedReader(new InputStreamReader(stdinStream)).lines()
-                                .forEach(stdinLineConsumer),
+                stdoutLineConsumer == null ? null
+                        : stdoutStream -> new BufferedReader(new InputStreamReader(stdoutStream)).lines()
+                                .forEach(stdoutLineConsumer),
                 stderrLineConsumer == null ? null
                         : stderrStream -> new BufferedReader(new InputStreamReader(stderrStream)).lines()
                                 .forEach(stderrLineConsumer),
                 cmdAndArgs);
     }
 
-    public static Future<Integer> execConsumingLines(Consumer<String> stdinLineConsumer, String... cmdAndArgs) {
-        return execConsumingLines(stdinLineConsumer, null, cmdAndArgs);
+    public static Future<Integer> execConsumingLines(Consumer<String> stdoutLineConsumer, String... cmdAndArgs) {
+        return execConsumingLines(stdoutLineConsumer, null, cmdAndArgs);
     }
 
     // -------------------------------------------------------------------------------------------------------------
 
     public static Future<Integer> execConsumingOutput(Consumer<String> stdoutConsumer,
             Consumer<String> stderrConsumer, String... cmdAndArgs) {
-        return exec(stdoutConsumer == null ? null : stdinStream -> stdoutConsumer.accept(readAll(stdinStream)),
+        return exec(stdoutConsumer == null ? null : stdoutStream -> stdoutConsumer.accept(readAll(stdoutStream)),
                 stderrConsumer == null ? null : stderrStream -> stderrConsumer.accept(readAll(stderrStream)),
                 cmdAndArgs);
     }

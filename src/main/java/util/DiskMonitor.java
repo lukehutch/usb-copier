@@ -99,12 +99,13 @@ public class DiskMonitor {
         // Use device letter as port. TODO: get USB port from /proc
         driveInfo.port = driveInfo.rawDriveDevice.charAt(driveInfo.rawDriveDevice.length() - 1) - 'a';
 
-        // Call df to get drive sizes (updated asynchronously)
+        driveInfo.clearListing();
+
+        // Call df to get drive sizes (updated asynchronously).
+        // Calls DiskMonitor.drivesChanged() only if successful.
         driveInfo.diskSize = -1L;
         driveInfo.diskSpaceUsed = -1L;
-        driveInfo.updateDriveSizesAsync(); // Calls drivesChanged() if successful
-
-        driveInfo.clearListing();
+        driveInfo.updateDriveSizesAsync();
 
         System.out.println("Drive mounted: " + driveInfo);
     }
@@ -117,6 +118,8 @@ public class DiskMonitor {
         driveInfo.port = 0;
         driveInfo.isPluggedIn = false;
         driveInfo.isMounted = false;
+
+        // Discard size info, since this is an unplug event
         driveInfo.diskSize = -1L;
         driveInfo.diskSpaceUsed = -1L;
 
@@ -133,11 +136,12 @@ public class DiskMonitor {
         driveInfo.isMounted = false;
         driveInfo.mountPoint = "";
 
-        driveInfo.clearListing();
-
         // Leave diskSize and diskSpaceUsed with the values they had before drive was unmounted,
         // so that drive can be unmounted after a copy (to prevent the dirty bit being set if the
         // drive is unplugged), but sizes can still be shown.
+
+        driveInfo.clearListing();
+
         drivesChanged();
 
         System.out.println("Drive unmounted: " + driveInfo);

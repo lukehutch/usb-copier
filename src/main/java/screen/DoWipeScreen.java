@@ -198,6 +198,7 @@ public class DoWipeScreen extends Screen {
 
             // Mark the partition as changed now that the drive is remounted
             selectedDrive.clearListing();
+            selectedDrive.updateDriveSizesAsync();
 
             // Finished -- briefly show 100% progress at end of job
             progressBar.setProgress(100, 100);

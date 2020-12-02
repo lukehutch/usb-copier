@@ -164,7 +164,8 @@ public class DriveInfo implements Comparable<DriveInfo> {
             if (taskOutput.exitCode != 0) {
                 System.out.println("Bad exit code " + taskOutput.exitCode + " from df: " + taskOutput.stderr);
             } else {
-                String[] lines = taskOutput.stdout.split("\n");
+                String err = taskOutput.stdout;
+                String[] lines = err.split("\n");
                 if (lines.length == 2) {
                     String line = lines[1];
                     // System.out.println(line);
@@ -180,8 +181,12 @@ public class DriveInfo implements Comparable<DriveInfo> {
                             e.printStackTrace();
                         }
                     }
+                    DiskMonitor.drivesChanged();
                 } else {
-                    System.out.println("Got bad output from df:\n" + taskOutput.stdout);
+                    if (err.length() > 0 && err.charAt(err.length() - 1) == '\n') {
+                        err = err.substring(0, err.length() - 1);
+                    }
+                    System.out.println("Got bad output from df:\n" + err);
                 }
             }
         });
@@ -196,7 +201,6 @@ public class DriveInfo implements Comparable<DriveInfo> {
                 }
             }
         }
-        updateDriveSizesAsync();
     }
 
     protected void transferCacheFrom(DriveInfo oldDriveInfo) {
@@ -244,6 +248,9 @@ public class DriveInfo implements Comparable<DriveInfo> {
     }
 
     private static String getInHumanUnits(long numer, long denom, boolean showDenom) {
+        if (numer < 0 || denom < 0) {
+            return "??";
+        }
         if (denom == 0) {
             return "0B";
         } else if (denom < _1k) {
