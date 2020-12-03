@@ -58,7 +58,7 @@ import util.DriveInfo;
 
 public class DoCopyScreen extends Screen {
     private final DriveInfo selectedDrive;
-    private volatile List<DriveInfo> otherDrives;
+    private volatile List<DriveInfo> destDrives;
     private final List<ProgressBar> progressBars;
 
     private List<Future<Integer>> rsyncFutures;
@@ -68,7 +68,7 @@ public class DoCopyScreen extends Screen {
         super(parentScreen);
 
         this.selectedDrive = selectedDrive;
-        this.otherDrives = otherDrives;
+        this.destDrives = otherDrives;
 
         VLayout layout = new VLayout();
 
@@ -94,17 +94,19 @@ public class DoCopyScreen extends Screen {
 
     @Override
     public void open() {
-        rsyncFutures = new ArrayList<>(otherDrives.size());
+        rsyncFutures = new ArrayList<>(destDrives.size());
         AtomicBoolean succeeded = new AtomicBoolean(true);
-        for (int i = 0; i < otherDrives.size(); i++) {
-            DriveInfo otherDrive = otherDrives.get(i);
+        for (int i = 0; i < destDrives.size(); i++) {
+            DriveInfo destDrive = destDrives.get(i);
             ProgressBar progressBar = progressBars.get(i);
 
             // Spawn a separate rsync task per drive. This parallelizes copying to multiple drives,
             // which could load the USB bus pretty heavily, but it has the advantage of reusing the
             // cache, assuming the destination drives have approximately the same write speed.
-            rsyncFutures.add(Exec.execConsumingLines(progressLine -> {
+            Future<Integer> rsyncTask = Exec.execConsumingLines(progressLine -> {
                 // Get progress percentage for rsync transfer
+                //                System.out.println(
+                //                        "Progress line for dest drive " + destDrive.partitionDevice + " : " + progressLine);
                 try {
                     StringTokenizer tok = new StringTokenizer(progressLine);
                     tok.nextToken();
@@ -127,27 +129,52 @@ public class DoCopyScreen extends Screen {
                     // Line is empty
                 }
             }, stderrLine -> System.out.println("rsync stderr line: " + stderrLine), //
-                    "rsync", "-rlptv", "--info=progress2",
+                    "rsync", "-rIlptv", "--info=progress2",
                     // End source dir in "/" to copy contents of dir, not dir itself
                     selectedDrive.mountPoint + "/", //
-                    otherDrive.mountPoint));
+                    destDrive.mountPoint);
+
+            // Set each progress meter to 100% at the end of the copy, since "rsync --progress2" will show 0%
+            // on termination if all files have already been copied, rather than 100%.
+            // Need to do this in a separate task, because the stdout handler above doesn't know when it has
+            // read the last line of stdout.
+            rsyncFutures.add(Exec.executor.submit(() -> {
+                int exitCode;
+                try {
+                    exitCode = rsyncTask.get();
+                } catch (InterruptedException | CancellationException e) {
+                    // Pass cancelation back to rsyncTask
+                    rsyncTask.cancel(true);
+                    throw e;
+                }
+                // Use 105 as the denominator, since there's still some work to do at the end of copy to
+                // sync and unmount
+                progressBar.setProgress(100, 105);
+                return exitCode;
+            }));
         }
 
         // Wait for all rsync tasks to terminate
         Exec.executor.submit(() -> {
-            for (Future<Integer> result : rsyncFutures) {
+            for (int driveIdx = 0; driveIdx < rsyncFutures.size(); driveIdx++) {
+                Future<Integer> task = rsyncFutures.get(driveIdx);
+                DriveInfo destDrive = destDrives.get(driveIdx);
                 try {
                     // Wait for copy operation to complete
-                    Integer resultCode = result.get();
+                    Integer resultCode = task.get();
                     if (resultCode != 0) {
-                        System.out.println("Copy failed with result code: " + resultCode);
+                        System.out.println(
+                                "Copy to " + destDrive.partitionDevice + " failed with result code " + resultCode);
                         succeeded.set(false);
                     }
-                    System.out.println("Copy succeeded");
+                    System.out.println("Copy to " + destDrive.partitionDevice + " succeeded");
 
-                } catch (InterruptedException | CancellationException | ExecutionException e) {
-                    // A copy operation failed
-                    System.out.println("Copy failed: " + e);
+                } catch (InterruptedException | CancellationException e) {
+                    System.out.println("Copy to " + destDrive.partitionDevice + " canceled");
+                    canceled.set(true);
+
+                } catch (ExecutionException e) {
+                    System.out.println("Copy to " + destDrive.partitionDevice + " failed: " + e);
                     succeeded.set(false);
                 }
             }
@@ -157,7 +184,7 @@ public class DoCopyScreen extends Screen {
 
             if (!canceled.get() && succeeded.get()) {
                 // Set all progress bars to 100% at end
-                for (int i = 0; i < otherDrives.size(); i++) {
+                for (int i = 0; i < destDrives.size(); i++) {
                     ProgressBar progressBar = progressBars.get(i);
                     if (progressBar != null) {
                         progressBar.setProgress(100, 100);
@@ -174,7 +201,6 @@ public class DoCopyScreen extends Screen {
             // Set completion or error message
             setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(),
                     canceled.get() ? Msg.CANCELED : succeeded.get() ? Msg.COMPLETED : Msg.ERROR)));
-            repaint();
 
             // Go to parent screen after a timeout
             waitThenGoToParentScreen(succeeded.get() ? 2000 : 3000);
@@ -182,21 +208,27 @@ public class DoCopyScreen extends Screen {
     }
 
     private void stopCopying() {
-        for (int i = 0; i < otherDrives.size(); i++) {
-            rsyncFutures.get(i).cancel(true);
+        if (canceled.get()) {
+            for (int driveIdx = 0; driveIdx < rsyncFutures.size(); driveIdx++) {
+                Future<Integer> task = rsyncFutures.get(driveIdx);
+                DriveInfo destDrive = destDrives.get(driveIdx);
+                System.out.println("Canceling task for copy to " + destDrive.partitionDevice);
+                task.cancel(true);
+            }
         }
 
         DiskMonitor.sync();
 
-        for (int i = 0; i < otherDrives.size(); i++) {
+        for (int i = 0; i < destDrives.size(); i++) {
+            DriveInfo driveInfo = destDrives.get(i);
+
             // Update drive size info
-            DriveInfo driveInfo = otherDrives.get(i);
             driveInfo.updateDriveSizeAsync();
+
+            driveInfo.clearListing();
 
             // Unmount so the drives can be pulled out without setting the dirty bit
             try {
-                driveInfo.clearListing();
-                driveInfo.updateDriveSizeAsync();
                 driveInfo.unmount();
             } catch (InterruptedException | ExecutionException e) {
                 e.printStackTrace();
@@ -219,6 +251,8 @@ public class DoCopyScreen extends Screen {
         if (button == HWButton.A) {
             // Tell the other thread that errors are due to cancellation
             canceled.set(true);
+            
+            setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(), Msg.CANCELING)));
 
             // Cancel file listing operation if it hasn't finished yet
             stopCopying();

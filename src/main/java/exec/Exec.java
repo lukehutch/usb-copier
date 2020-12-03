@@ -14,12 +14,14 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 public class Exec {
 
-    public static String[] prependCommand = { "sudo" };
+    // e.g. { "sudo" }
+    public static String[] prependCommand = null;
 
     /** Start new threads in daemon mode so they are killed when JVM tries to shut down. */
     public static ExecutorService executor = Executors.newCachedThreadPool(r -> {
@@ -55,35 +57,44 @@ public class Exec {
             cmd = cmdAndArgs;
         }
 
-        System.out.println("CMD: " + String.join(" ", cmd));
+        Future<Process> processFuture = executor.submit(() -> {
+            Process process = Runtime.getRuntime().exec(cmd);
+            System.out.println("Executing command with pid " + process.pid() + ": " + String.join(" ", cmd));
+            return process;
+        });
 
-        Future<Process> processFuture = executor.submit(() -> Runtime.getRuntime().exec(cmd));
-
-        AtomicReference<Future<Void>> stdoutProcessorFuture = //
-                new AtomicReference<>();
-        AtomicReference<Future<Void>> stderrProcessorFuture = //
-                new AtomicReference<>();
-        AtomicReference<Future<Integer>> exitCodeFuture = //
-                new AtomicReference<>();
+        AtomicReference<Future<Void>> stdoutProcessorFuture = new AtomicReference<>();
+        AtomicReference<Future<Void>> stderrProcessorFuture = new AtomicReference<>();
+        AtomicReference<Future<Integer>> exitCodeFuture = new AtomicReference<>();
+        AtomicBoolean canceled = new AtomicBoolean(false);
 
         Runnable cancel = () -> {
-            try {
-                processFuture.get().destroy();
-            } catch (Exception e) {
-                // Ignore (exitCodeFuture.get() will still detect exceptions)
-            }
-            // Standard Java I/O can't be interrupted, but interrupt output
-            // processors anyway, in case they are blocking on something that
-            // is interruptible. Their InputStream will be closed by
-            // processFuture.get().destroy().
-            if (stdoutProcessorFuture.get() != null) {
-                stdoutProcessorFuture.get().cancel(true);
-            }
-            if (stderrProcessorFuture.get() != null) {
-                stderrProcessorFuture.get().cancel(true);
-            }
-            if (exitCodeFuture.get() != null) {
-                stderrProcessorFuture.get().cancel(true);
+            // Only try to cancel once
+            if (canceled.compareAndSet(false, true)) {
+                try {
+                    System.out.println("Cancel: destroying process for command: " + String.join(" ", cmd));
+                    Process process = processFuture.get();
+                    if (process != null) {
+                        // process.destroy() sends SIGTERM (15), not SIGINT (2), so send SIGINT first to be safe
+                        Exec.execWithTaskOutputSynchronous("kill", "-2", "" + process.pid());
+                        process.destroy();
+                    }
+                } catch (Exception e) {
+                    // Ignore (exitCodeFuture.get() will still detect exceptions)
+                }
+                // Standard Java I/O can't be interrupted, but interrupt output
+                // processors anyway, in case they are blocking on something that
+                // is interruptible. Their InputStream will be closed by
+                // processFuture.get().destroy().
+                if (stdoutProcessorFuture.get() != null) {
+                    stdoutProcessorFuture.get().cancel(true);
+                }
+                if (stderrProcessorFuture.get() != null) {
+                    stderrProcessorFuture.get().cancel(true);
+                }
+                if (exitCodeFuture.get() != null) {
+                    stderrProcessorFuture.get().cancel(true);
+                }
             }
         };
 
@@ -94,12 +105,18 @@ public class Exec {
                     if (stdoutStream != null) {
                         // stdout has not been redirected
                         stdoutConsumer.accept(stdoutStream);
+
                     } else {
                         System.err.println("stdout was redirected for command: " + String.join(" ", cmd));
                         stdoutConsumer.accept(new ByteArrayInputStream(new byte[0]));
                     }
                     return null;
+                } catch (IOException e) {
+                    // Assume this is a broken pipe
+                    cancel.run();
+                    return null;
                 } catch (Exception e) {
+                    // Re-throw other exceptions so that they can be appended using addSuppressed below
                     cancel.run();
                     throw e;
                 }
@@ -118,7 +135,12 @@ public class Exec {
                         stderrConsumer.accept(new ByteArrayInputStream(new byte[0]));
                     }
                     return null;
+                } catch (IOException e) {
+                    // Assume this is a broken pipe
+                    cancel.run();
+                    return null;
                 } catch (Exception e) {
+                    // Re-throw other exceptions so that they can be appended using addSuppressed below
                     cancel.run();
                     throw e;
                 }
@@ -242,6 +264,12 @@ public class Exec {
             this.exitCode = exitCode;
             this.stdout = stdout;
             this.stderr = stderr;
+        }
+
+        @Override
+        public String toString() {
+            return "exit code: " + exitCode + "; stdout: " + stdout.replace("\n", "\\n") + "; stderr: "
+                    + stderr.replace("\n", "\\n");
         }
     }
 

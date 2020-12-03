@@ -51,7 +51,7 @@ public class DiskMonitor {
         // Start the devmon thread (run in a separate executor since it will run until the program terminates.)
         monitorJob = Exec.execConsumingLines(new DevMonParser(),
                 stderrLine -> System.out.println("stderr output when attempting to start devmon: " + stderrLine), //
-                "devmon");
+                "sudo", "-u", "pi", "devmon");
 
         // Mount all (otherwise manually-unmounted drives that are plugged in on start will stay unmounted)
         mountAll();

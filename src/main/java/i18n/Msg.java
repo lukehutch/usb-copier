@@ -52,6 +52,7 @@ public class Msg {
 
     public static final Str ERROR = new Str("Error", "오류", "发生错误");
     public static final Str CANCELED = new Str("Canceled", "취소 되었다", "取消了");
+    public static final Str CANCELING = new Str("Canceling", "취소중", "取消中");
     public static final Str COMPLETED = new Str("Completed", "성공적 완료", "成功完成");
 
     public static final Str SRC = new Str("Src", "원본", "复制源"); // Currently unused

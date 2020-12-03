@@ -107,13 +107,19 @@ public class DriveInfo implements Comparable<DriveInfo> {
                         }
                     }
                     if (fileListingFuture == null) {
+                        String mtPt = mountPoint;
+                        if (mountPoint.isEmpty()) {
+                            System.out.println("Tried listing non-mounted drive");
+                            fileListingFuture = CompletableFuture
+                                    .failedFuture(new IOException("Mount failed: " + partitionDevice));
+                        }
                         fileListingFuture = Exec.thenMap(
-                                Exec.execWithTaskOutput("find", mountPoint, "-type", "f", "-printf", "%s\\t%P\\n"),
+                                Exec.execWithTaskOutput("find", mtPt, "-type", "f", "-printf", "%s\\t%P\\n"),
                                 taskOutput -> {
                                     if (taskOutput.exitCode != 0) {
                                         throw new IOException("Could not list files: " + taskOutput.stderr);
                                     } else {
-                                        Path dir = Paths.get(mountPoint);
+                                        Path dir = Paths.get(mtPt);
                                         System.out.println("Listing files in: " + dir);
                                         boolean canRead = dir.toFile().canRead();
                                         if (!canRead) {
@@ -155,11 +161,35 @@ public class DriveInfo implements Comparable<DriveInfo> {
     }
 
     public void unmount() throws InterruptedException, ExecutionException {
-        Exec.execWithTaskOutputSynchronous("devmon", "--unmount", partitionDevice);
+        // isMounted will be updated by DiskMonitor on unmount event
+        var taskOutput = Exec.execWithTaskOutputSynchronous("devmon", "--unmount", partitionDevice);
+        if (taskOutput.exitCode != 0 || !taskOutput.stderr.isEmpty()) {
+            System.out.println("Unmount failed with exit code " + taskOutput.exitCode + " : " + taskOutput.stderr);
+        }
+        // Wait for DiskMonitor to detect that disk is unmounted
+        for (int i = 0; i < 30; i++) {
+            if (!isMounted) {
+                return;
+            }
+            Thread.sleep(100);
+        }
+        System.out.println("Unmount failed after timeout");
     }
 
     public void mount() throws InterruptedException, ExecutionException {
-        Exec.execWithTaskOutputSynchronous("devmon", "--mount", partitionDevice);
+        // isMounted will be updated by DiskMonitor on mount event
+        var taskOutput = Exec.execWithTaskOutputSynchronous("devmon", "--mount", partitionDevice);
+        if (taskOutput.exitCode != 0 || !taskOutput.stderr.isEmpty()) {
+            System.out.println("Mount failed with exit code " + taskOutput.exitCode + " : " + taskOutput.stderr);
+        }
+        // Wait for DiskMonitor to detect that disk is mounted
+        for (int i = 0; i < 30; i++) {
+            if (isMounted) {
+                return;
+            }
+            Thread.sleep(100);
+        }
+        System.out.println("Mount failed after timeout");
     }
 
     public void remount() throws InterruptedException, ExecutionException {

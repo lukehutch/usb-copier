@@ -82,7 +82,6 @@ public class DoWipeScreen extends Screen {
     private TaskOutput mkfs() {
         // Format partition as vfat
         System.out.println("Formatting as vfat: " + selectedDrive.partitionDevice);
-        // Expands to "sudo -u pi sudo /sbin/mkfs.vfat ...", which will undo the "sudo -u pi" part
         return Exec.execWithTaskOutputSynchronous("sudo", "/sbin/mkfs.vfat", "-F32", selectedDrive.partitionDevice);
     }
 
@@ -102,9 +101,7 @@ public class DoWipeScreen extends Screen {
                 progressBar.setProgress(percent, 100);
                 repaint();
             }
-        },
-                // Expands to "sudo -u pi sudo dd ...", which will undo the "sudo -u pi" part
-                "sudo", "dd", "if=/dev/zero", "of=" + selectedDrive.partitionDevice, "bs=4096", "status=progress");
+        }, "sudo", "dd", "if=/dev/zero", "of=" + selectedDrive.partitionDevice, "bs=4096", "status=progress");
     }
 
     public DoWipeScreen(Screen parentScreen, DriveInfo selectedDrive, boolean isQuick) {

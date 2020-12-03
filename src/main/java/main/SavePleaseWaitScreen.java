@@ -37,6 +37,7 @@ import aobtk.font.Font;
 import aobtk.font.FontStyle;
 import aobtk.hw.Bonnet;
 import aobtk.hw.HWButton;
+import aobtk.oled.Display;
 import aobtk.oled.OLEDDriver;
 import aobtk.ui.element.TextElement;
 import aobtk.ui.element.VLayout;
@@ -93,7 +94,6 @@ public class SavePleaseWaitScreen {
                 layout.addSpace(2);
                 layout.add(new TextElement(style, "请耐心等待"));
                 setUI(layout);
-                repaint();
             }
 
             @Override
@@ -103,7 +103,7 @@ public class SavePleaseWaitScreen {
 
         Thread.sleep(5000);
 
-        byte[] bitBuffer = Bonnet.display.getBitBuffer();
+        byte[] bitBuffer = Display.newBitBuffer();
 
         String screenContents = new BigInteger(bitBuffer).toString(16);
 

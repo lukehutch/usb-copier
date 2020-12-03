@@ -78,8 +78,9 @@ public class RootScreen extends DrivesChangedListenerScreen {
 
     @Override
     public void drivesChanged(List<DriveInfo> drivesList) {
-        // Update UI with drives in list
+        // Only update UI when not repainting
         synchronized (uiLock) {
+            // Update UI with drives in list
             this.drivesList = drivesList;
             driveMenu.clear();
             if (!drivesList.isEmpty()) {

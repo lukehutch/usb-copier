@@ -66,11 +66,13 @@ public class Main {
     }
 
     public static void main(String[] args) throws Exception {
-        Exec.prependCommand = new String[] { "sudo", "-u", "pi" };
+        // Processes started with sudo can't be stopped by Java for some reason:
+        // https://stackoverflow.com/questions/65111915
+        // Exec.prependCommand = new String[] { "sudo" };
 
         // Start by immediately displaying a "Please Wait" screen
         // (it takes time to load the fonts, start the disk monitor, etc.)
-        Bonnet.display.setFromBitBuffer(SavePleaseWaitScreen.getSavedBitBuffer());
+        Bonnet.scheduleDraw(Bonnet.render(SavePleaseWaitScreen.getSavedBitBuffer()));
 
         // Start drive listener
         diskMonitor = new DiskMonitor();
