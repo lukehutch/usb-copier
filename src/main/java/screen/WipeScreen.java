@@ -85,12 +85,15 @@ public class WipeScreen extends DrivesChangedListenerScreen {
     public void buttonDown(HWButton button) {
         if (button == HWButton.L) {
             wipeMenu.decSelectedIdx();
+            repaint();
         } else if (button == HWButton.R) {
             wipeMenu.incSelectedIdx();
+            repaint();
         } else if ((button == HWButton.B || button == HWButton.C)) {
             if (warningText.isHidden()) {
                 // Have to confirm twice -- the first time just show a warning
                 warningText.hide(false);
+                repaint();
             } else {
                 // The second time, start the wipe
                 isWiping = true;

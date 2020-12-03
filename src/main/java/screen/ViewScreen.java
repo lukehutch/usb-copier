@@ -191,6 +191,7 @@ public class ViewScreen extends DrivesChangedListenerScreen {
             } else if (button == HWButton.R) {
                 viewX -= VIEW_X_STEP;
             }
+            repaint();
         }
     }
 }

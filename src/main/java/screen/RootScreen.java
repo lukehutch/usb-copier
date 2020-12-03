@@ -188,6 +188,7 @@ public class RootScreen extends DrivesChangedListenerScreen {
                 }
                 selectDriveIdx(currDrives, newSelectedDriveIdx);
             }
+            repaint();
         }
     }
 
@@ -197,9 +198,11 @@ public class RootScreen extends DrivesChangedListenerScreen {
         if (button == HWButton.L) {
             // Left
             actionMenu.decSelectedIdx();
+            repaint();
         } else if (button == HWButton.R) {
             // Right
             actionMenu.incSelectedIdx();
+            repaint();
         } else if ((button == HWButton.B || button == HWButton.C) && selectedDrive != null) {
             // Either B or C work for select
             Str action = actionMenu.getSelectedItem();

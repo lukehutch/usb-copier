@@ -63,9 +63,11 @@ public class ChooseLangScreen extends Screen {
         if (button == HWButton.U) {
             // Left
             langMenu.decSelectedIdx();
+            repaint();
         } else if (button == HWButton.D) {
             // Right
             langMenu.incSelectedIdx();
+            repaint();
         } else if ((button == HWButton.B || button == HWButton.C)) {
             // Select the language, and move to RootScreen
             Str.lang = langMenu.getSelectedIdx();
