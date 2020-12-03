@@ -46,6 +46,14 @@ public class Exec {
         public void accept(T val) throws IOException;
     }
 
+    private static void waitForProcessTermination(Process process) throws InterruptedException {
+        if (process != null) {
+            for (int count = 0; count < 40 && process.isAlive(); count++) {
+                Thread.sleep(50);
+            }
+        }
+    }
+
     public static Future<Integer> exec(ConsumerThrowingIOException<InputStream> stdoutConsumer,
             ConsumerThrowingIOException<InputStream> stderrConsumer, String... cmdAndArgs) {
         String[] cmd;
@@ -72,12 +80,25 @@ public class Exec {
             // Only try to cancel once
             if (canceled.compareAndSet(false, true)) {
                 try {
-                    System.out.println("Cancel: destroying process for command: " + String.join(" ", cmd));
                     Process process = processFuture.get();
                     if (process != null) {
-                        // process.destroy() sends SIGTERM (15), not SIGINT (2), so send SIGINT first to be safe
-                        Exec.execWithTaskOutputSynchronous("kill", "-2", "" + process.pid());
+                        System.out.println("Cancel: destroying process for command: " + String.join(" ", cmd));
+
+                        // Send SIGINT
+                        var taskResult = Exec.execWithTaskOutputSynchronous("kill", "-2", "" + process.pid());
+                        if (taskResult.exitCode != 0) {
+                            System.out.println("Failed to kill process " + process.pid() + " with SIGINT: "
+                                    + taskResult.stderr);
+                        }
+
+                        // Send SIGTERM
                         process.destroy();
+
+                        // Wait for process termination
+                        waitForProcessTermination(process);
+                        if (process.isAlive()) {
+                            System.out.println("Failed to destroy process " + process.pid() + " with SIGTERM");
+                        }
                     }
                 } catch (Exception e) {
                     // Ignore (exitCodeFuture.get() will still detect exceptions)
@@ -125,6 +146,9 @@ public class Exec {
 
         if (stderrConsumer != null) {
             stderrProcessorFuture.set(executor.submit(() -> {
+                if (processFuture.get() == null) {
+                    throw new Exception("Process was never started");
+                }
                 try {
                     InputStream stderrStream = processFuture.get().getErrorStream();
                     if (stderrStream != null) {
@@ -149,9 +173,20 @@ public class Exec {
 
         exitCodeFuture.set(executor.submit(() -> {
             try {
+                // Get the process exit code
                 return processFuture.get().waitFor();
+
             } catch (Exception e) {
                 cancel.run();
+
+                // Wait a while for process to exit, so that anything that calls exitCodeFuture.get()
+                // on a canceled task will wait until the task has been killed. This way, if the task
+                // opened the block device or any files on the partition (e.g. dd or rsync), then the
+                // drive can be cleanly unmounted once exitCodeFuture.get() is called, without a
+                // device busy error.
+                waitForProcessTermination(processFuture.get());
+
+                // Re-throw the exception to the caller of exitCodeFuture.get()
                 throw e;
             }
         }));

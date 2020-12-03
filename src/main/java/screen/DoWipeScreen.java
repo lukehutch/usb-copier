@@ -171,6 +171,7 @@ public class DoWipeScreen extends Screen {
                 } catch (InterruptedException | CancellationException e3) {
                     // Operation was cancelled, and child dd process was killed by Command.commandWithConsumer()
                     canceled = true;
+                    // Fall through on cancelation so that mkfs still runs
                 }
             } else {
                 // If not doing a deep format, set progress to 50% before quick wipe starts so that it looks
@@ -179,6 +180,9 @@ public class DoWipeScreen extends Screen {
                 repaint();
             }
 
+            // Sync so that buffers from dd are flushed  
+            DiskMonitor.sync();
+
             // Format the partition (whether or not low-level format was canceled)
             TaskOutput mkfsResult = mkfs();
             if (mkfsResult.exitCode != 0) {
@@ -186,7 +190,7 @@ public class DoWipeScreen extends Screen {
                         "mkfs returned non-zero exit code " + mkfsResult.exitCode + ": " + mkfsResult.stderr);
             }
 
-            // sync
+            // Sync again
             DiskMonitor.sync();
 
             // Mount drive

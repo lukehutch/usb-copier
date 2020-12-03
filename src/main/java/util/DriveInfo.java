@@ -162,8 +162,9 @@ public class DriveInfo implements Comparable<DriveInfo> {
 
     public void unmount() throws InterruptedException, ExecutionException {
         // isMounted will be updated by DiskMonitor on unmount event
-        var taskOutput = Exec.execWithTaskOutputSynchronous("devmon", "--unmount", partitionDevice);
-        if (taskOutput.exitCode != 0 || !taskOutput.stderr.isEmpty()) {
+        var taskOutput = Exec.execWithTaskOutputSynchronous("sudo", "-u", "pi", "devmon", "--unmount",
+                partitionDevice);
+        if (taskOutput.exitCode != 0) {
             System.out.println("Unmount failed with exit code " + taskOutput.exitCode + " : " + taskOutput.stderr);
         }
         // Wait for DiskMonitor to detect that disk is unmounted
@@ -178,8 +179,9 @@ public class DriveInfo implements Comparable<DriveInfo> {
 
     public void mount() throws InterruptedException, ExecutionException {
         // isMounted will be updated by DiskMonitor on mount event
-        var taskOutput = Exec.execWithTaskOutputSynchronous("devmon", "--mount", partitionDevice);
-        if (taskOutput.exitCode != 0 || !taskOutput.stderr.isEmpty()) {
+        var taskOutput = Exec.execWithTaskOutputSynchronous("sudo", "-u", "pi", "devmon", "--mount",
+                partitionDevice);
+        if (taskOutput.exitCode != 0) {
             System.out.println("Mount failed with exit code " + taskOutput.exitCode + " : " + taskOutput.stderr);
         }
         // Wait for DiskMonitor to detect that disk is mounted

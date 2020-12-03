@@ -41,7 +41,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 
 import exec.Exec;
-import exec.Exec.TaskOutput;
 
 public class DiskMonitor {
 
@@ -154,18 +153,22 @@ public class DiskMonitor {
     }
 
     public static void sync() {
-        Exec.execWithTaskOutputSynchronous("sync");
+        var taskOutput = Exec.execWithTaskOutputSynchronous("sync");
+        if (taskOutput.exitCode != 0) {
+            // Should not happen
+            System.out.println("sync failed: " + taskOutput.stderr);
+        }
     }
 
     public static void unmountAll() {
-        TaskOutput taskOutput = Exec.execWithTaskOutputSynchronous("devmon", "--unmount-all");
+        var taskOutput = Exec.execWithTaskOutputSynchronous("devmon", "--unmount-all");
         if (taskOutput.exitCode != 0) {
             System.out.println("Could not unmount all drives: " + taskOutput.stderr);
         }
     }
 
     public static void mountAll() {
-        TaskOutput taskOutput = Exec.execWithTaskOutputSynchronous("devmon", "--mount-all");
+        var taskOutput = Exec.execWithTaskOutputSynchronous("devmon", "--mount-all");
         if (taskOutput.exitCode != 0) {
             System.out.println("Could not unmount all drives: " + taskOutput.stderr);
         }
