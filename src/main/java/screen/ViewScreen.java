@@ -129,16 +129,6 @@ public class ViewScreen extends DrivesChangedListenerScreen {
         fileListingTask = Exec.executor.submit( //
                 // Check if drive is mounted, and if not, mount it
                 () -> {
-                    if (!driveInfo.isMounted()) {
-                        try {
-                            driveInfo.mount();
-                        } catch (ExecutionException | InterruptedException e) {
-                            // Disk was not successfully mounted
-                            throw new IllegalArgumentException(
-                                    "Failed to mount drive " + selectedDrive.partitionDevice, e);
-                        }
-                    }
-
                     // Recursively walk the directory tree for the drive 
                     List<FileInfo> fileListing;
                     try {

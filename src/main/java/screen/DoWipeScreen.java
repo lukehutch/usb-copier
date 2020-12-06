@@ -63,26 +63,10 @@ public class DoWipeScreen extends Screen {
 
     private Queue<String> ddStderrLines = new ConcurrentLinkedDeque<>();
 
-    private void exceptionThrown(Exception e) {
-        e.printStackTrace();
-        setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(), Msg.ERROR)));
-        waitThenGoToParentScreen(3000);
-
-        // Try remounting drive, if it is unmounted
-        DriveInfo selectedDrive = this.selectedDrive;
-        if (selectedDrive != null && !selectedDrive.isMounted()) {
-            try {
-                selectedDrive.mount();
-            } catch (InterruptedException | ExecutionException e1) {
-                System.out.println("Could not mount drive after exception thrown: " + e1);
-            }
-        }
-    }
-
     private TaskOutput mkfs() {
         // Format partition as vfat
         System.out.println("Formatting as vfat: " + selectedDrive.partitionDevice);
-        return Exec.execWithTaskOutputSynchronous("sudo", "/sbin/mkfs.vfat", "-F32", selectedDrive.partitionDevice);
+        return Exec.execWithTaskOutputSynchronous("/sbin/mkfs.vfat", selectedDrive.partitionDevice);
     }
 
     private Future<Integer> ddWipe(DriveInfo selectedDrive) {
@@ -101,7 +85,9 @@ public class DoWipeScreen extends Screen {
                 progressBar.setProgress(percent, 100);
                 repaint();
             }
-        }, "sudo", "dd", "if=/dev/zero", "of=" + selectedDrive.partitionDevice, "bs=4096", "status=progress");
+        }, //
+                "dd", "if=/dev/zero", "of=" + selectedDrive.partitionDevice, "bs=4096", "status=progress",
+                "oflag=direct");
     }
 
     public DoWipeScreen(Screen parentScreen, DriveInfo selectedDrive, boolean isQuick) {
@@ -138,13 +124,13 @@ public class DoWipeScreen extends Screen {
             }
 
             // Unmount drive first, if mounted
-            try {
-                selectedDrive.unmount();
-            } catch (Exception e) {
-                exceptionThrown(e);
+            boolean unmounted = selectedDrive.unmount();
+            if (!unmounted) {
+                System.out.println("Could not unmount " + this.selectedDrive.partitionDevice);
+                setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(), Msg.ERROR)));
+                waitThenGoToParentScreen(2000);
                 return;
             }
-
             // Clear the partition listing
             selectedDrive.clearListing();
 
@@ -152,12 +138,14 @@ public class DoWipeScreen extends Screen {
             if (!isQuick) {
                 try {
                     // Safe wipe of partition -- write zeroes to entire partition using dd
-                    ddCommandTask = ddWipe(selectedDrive);
+                    var task = ddCommandTask = ddWipe(selectedDrive);
 
                     // Wait for dd to finish
-                    int ddCommandExitCode = ddCommandTask.get();
+                    int ddCommandExitCode = task.get();
+
                     // Set ref to null so that A-button doesn't try to cancel it again
                     ddCommandTask = null;
+
                     if (ddCommandExitCode != 0) {
                         throw new IOException("dd returned non-zero exit code " + ddCommandExitCode + ": "
                                 + String.join("\n", ddStderrLines));
@@ -165,7 +153,9 @@ public class DoWipeScreen extends Screen {
 
                 } catch (IOException | ExecutionException e) {
                     // dd failed
-                    exceptionThrown(e);
+                    e.printStackTrace();
+                    setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(), Msg.ERROR)));
+                    waitThenGoToParentScreen(3000);
                     return;
 
                 } catch (InterruptedException | CancellationException e3) {
@@ -193,19 +183,8 @@ public class DoWipeScreen extends Screen {
             // Sync again
             DiskMonitor.sync();
 
-            // Mount drive
-            try {
-                // Remount the partition and read the filesystem size
-                selectedDrive.mount();
-
-            } catch (InterruptedException | CancellationException e) {
-                canceled = true;
-
-            } catch (Exception e) {
-                // Error occurred during remount, so probably the drive is messed up now
-                exceptionThrown(e);
-                return;
-            }
+            // Remount the partition
+            selectedDrive.mount();
 
             // Finished -- briefly show 100% progress at end of job
             progressBar.setProgress(100, 100);
@@ -241,18 +220,14 @@ public class DoWipeScreen extends Screen {
     @Override
     public void buttonDown(HWButton button) {
         if (button == HWButton.A) {
-            // Allow low-level wipe to be canceled
+            // Allow low-level wipe to be canceled only once
             if (ddCommandTask != null) {
                 System.out.println("Canceling dd task");
                 ddCommandTask.cancel(true);
                 // Prevent double attempt to cancel
                 ddCommandTask = null;
                 // Show canceled text
-                setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(), Msg.CANCELED)));
-                // Go back to parent
-                // (N.B. WIPE_EXECUTOR will still be trying to run mkfs, sync, and mount
-                // in the background, to get the drive back to a legible state)
-                waitThenGoToParentScreen(2000);
+                setUI(new VLayout(new TextElement(Main.UI_FONT.newStyle(), Msg.CANCELING)));
             }
         }
     }

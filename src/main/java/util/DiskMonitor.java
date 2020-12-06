@@ -50,10 +50,7 @@ public class DiskMonitor {
         // Start the devmon thread (run in a separate executor since it will run until the program terminates.)
         monitorJob = Exec.execConsumingLines(new DevMonParser(),
                 stderrLine -> System.out.println("stderr output when attempting to start devmon: " + stderrLine), //
-                "sudo", "-u", "pi", "devmon");
-
-        // Mount all (otherwise manually-unmounted drives that are plugged in on start will stay unmounted)
-        mountAll();
+                "devmon");
     }
 
     private static final Map<String, DriveInfo> partitionDeviceToDriveInfo = new ConcurrentHashMap<>();
@@ -90,10 +87,11 @@ public class DiskMonitor {
     /** Drive is mounted and drive metadata has been read. */
     static void driveMounted(String partitionDevice, String mountPoint, String label) {
         DriveInfo driveInfo = getOrCreateDriveInfo(partitionDevice);
-        System.out.println("Drive mounted: " + driveInfo);
 
         driveInfo.mountPoint = mountPoint;
-        driveInfo.label = label;
+        if (label != null) {
+            driveInfo.label = label;
+        }
         driveInfo.isPluggedIn = true;
         driveInfo.isMounted = true;
 
@@ -102,17 +100,19 @@ public class DiskMonitor {
 
         driveInfo.clearListing();
 
-        // Call df to get drive sizes (updated asynchronously).
-        // Calls DiskMonitor.drivesChanged() only if successful.
         driveInfo.diskSize = -1L;
         driveInfo.diskSpaceUsed = -1L;
+
+        System.out.println("Drive mounted: " + driveInfo);
+
+        // Call df to get drive sizes (updated asynchronously).
+        // Calls DiskMonitor.drivesChanged() only if successful.
         driveInfo.updateDriveSizeAsync();
     }
 
     /** Drive was unplugged */
     static void driveUnplugged(String partitionDevice) {
         DriveInfo driveInfo = getOrCreateDriveInfo(partitionDevice);
-        System.out.println("Drive unplugged: " + driveInfo);
 
         driveInfo.mountPoint = "";
         driveInfo.label = "";
@@ -126,13 +126,13 @@ public class DiskMonitor {
 
         driveInfo.clearListing();
 
+        System.out.println("Drive unplugged: " + driveInfo);
         drivesChanged();
     }
 
     /** Drive was unmounted */
     static void driveUnmounted(String partitionDevice) {
         DriveInfo driveInfo = getOrCreateDriveInfo(partitionDevice);
-        System.out.println("Drive unmounted: " + driveInfo);
 
         driveInfo.isMounted = false;
         driveInfo.mountPoint = "";
@@ -143,6 +143,7 @@ public class DiskMonitor {
 
         driveInfo.clearListing();
 
+        System.out.println("Drive unmounted: " + driveInfo);
         drivesChanged();
     }
 
@@ -168,7 +169,7 @@ public class DiskMonitor {
     }
 
     public static void mountAll() {
-        var taskOutput = Exec.execWithTaskOutputSynchronous("devmon", "--mount-all");
+        var taskOutput = Exec.execWithTaskOutputSynchronous("devmon", "--mount-all", "--sync");
         if (taskOutput.exitCode != 0) {
             System.out.println("Could not unmount all drives: " + taskOutput.stderr);
         }

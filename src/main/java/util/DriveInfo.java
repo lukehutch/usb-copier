@@ -96,47 +96,45 @@ public class DriveInfo implements Comparable<DriveInfo> {
             synchronized (fileListingLock) {
                 // Prevent race condition -- check fileListingFuture again inside synchronized block 
                 if (fileListingFuture == null) {
-                    if (!isMounted) {
-                        // If drive is not mounted for some reason, try mounting drive first
-                        try {
-                            mount();
-                        } catch (InterruptedException | ExecutionException e) {
-                            // Drive could not be mounted
-                            fileListingFuture = CompletableFuture
-                                    .failedFuture(new IOException("Not mounted: " + partitionDevice));
-                        }
-                    }
-                    if (fileListingFuture == null) {
+                    // If drive is not mounted for some reason, try mounting drive first
+                    if (!isMounted && !mount()) {
+                        // Drive could not be mounted
+                        fileListingFuture = CompletableFuture
+                                .failedFuture(new IOException("Mount failed: " + partitionDevice));
+                    } else {
                         String mtPt = mountPoint;
-                        if (mountPoint.isEmpty()) {
+                        if (mtPt.isEmpty()) {
                             System.out.println("Tried listing non-mounted drive");
                             fileListingFuture = CompletableFuture
                                     .failedFuture(new IOException("Mount failed: " + partitionDevice));
-                        }
-                        fileListingFuture = Exec.thenMap(
-                                Exec.execWithTaskOutput("find", mtPt, "-type", "f", "-printf", "%s\\t%P\\n"),
-                                taskOutput -> {
-                                    if (taskOutput.exitCode != 0) {
-                                        throw new IOException("Could not list files: " + taskOutput.stderr);
-                                    } else {
-                                        Path dir = Paths.get(mtPt);
-                                        System.out.println("Listing files in: " + dir);
-                                        boolean canRead = dir.toFile().canRead();
-                                        if (!canRead) {
-                                            throw new IOException("Cannot read dir: " + dir);
-                                        }
-                                        List<FileInfo> fileListing = new ArrayList<>();
-                                        for (String line : taskOutput.stdout.split("\n")) {
-                                            int tabIdx = line.indexOf("\t");
-                                            if (tabIdx > 0) {
-                                                fileListing.add(new FileInfo(Paths.get(line.substring(tabIdx + 1)),
-                                                        Long.parseLong(line.substring(0, tabIdx))));
+                        } else {
+                            fileListingFuture = Exec.thenMap(
+                                    Exec.execWithTaskOutput("find", mtPt, "-type", "f", "-printf", "%s\\t%P\\n"),
+                                    taskOutput -> {
+                                        System.out.println("find task completed");
+                                        if (taskOutput.exitCode != 0) {
+                                            throw new IOException("Could not list files: " + taskOutput.stderr);
+                                        } else {
+                                            Path dir = Paths.get(mtPt);
+                                            System.out.println("Listing files in: " + dir);
+                                            boolean canRead = dir.toFile().canRead();
+                                            if (!canRead) {
+                                                throw new IOException("Cannot read dir: " + dir);
                                             }
+                                            List<FileInfo> fileListing = new ArrayList<>();
+                                            for (String line : taskOutput.stdout.split("\n")) {
+                                                int tabIdx = line.indexOf("\t");
+                                                if (tabIdx > 0) {
+                                                    fileListing
+                                                            .add(new FileInfo(Paths.get(line.substring(tabIdx + 1)),
+                                                                    Long.parseLong(line.substring(0, tabIdx))));
+                                                }
+                                            }
+                                            Collections.sort(fileListing);
+                                            return fileListing;
                                         }
-                                        Collections.sort(fileListing);
-                                        return fileListing;
-                                    }
-                                });
+                                    });
+                        }
                     }
                 }
             }
@@ -160,38 +158,44 @@ public class DriveInfo implements Comparable<DriveInfo> {
         return isMounted;
     }
 
-    public void unmount() throws InterruptedException, ExecutionException {
+    public boolean unmount() {
         // isMounted will be updated by DiskMonitor on unmount event
-        var taskOutput = Exec.execWithTaskOutputSynchronous("sudo", "-u", "pi", "devmon", "--unmount",
-                partitionDevice);
+        var taskOutput = Exec.execWithTaskOutputSynchronous("devmon", "--unmount", partitionDevice);
         if (taskOutput.exitCode != 0) {
             System.out.println("Unmount failed with exit code " + taskOutput.exitCode + " : " + taskOutput.stderr);
         }
         // Wait for DiskMonitor to detect that disk is unmounted
         for (int i = 0; i < 30; i++) {
             if (!isMounted) {
-                return;
+                return true;
             }
-            Thread.sleep(100);
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+            }
         }
         System.out.println("Unmount failed after timeout");
+        return false;
     }
 
-    public void mount() throws InterruptedException, ExecutionException {
+    public boolean mount() {
         // isMounted will be updated by DiskMonitor on mount event
-        var taskOutput = Exec.execWithTaskOutputSynchronous("sudo", "-u", "pi", "devmon", "--mount",
-                partitionDevice);
+        var taskOutput = Exec.execWithTaskOutputSynchronous("devmon", "--mount", partitionDevice, "--sync");
         if (taskOutput.exitCode != 0) {
             System.out.println("Mount failed with exit code " + taskOutput.exitCode + " : " + taskOutput.stderr);
         }
         // Wait for DiskMonitor to detect that disk is mounted
         for (int i = 0; i < 30; i++) {
             if (isMounted) {
-                return;
+                return true;
             }
-            Thread.sleep(100);
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+            }
         }
         System.out.println("Mount failed after timeout");
+        return false;
     }
 
     public void remount() throws InterruptedException, ExecutionException {

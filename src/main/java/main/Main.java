@@ -105,10 +105,10 @@ public class Main {
     }
 
     public static void shutdown() {
-        // Shut down all task executors
-        Exec.shutdown();
         // Stop monitoring for changes in plugged drives
         DiskMonitor.shutdown();
+        // Shut down all task executors
+        Exec.shutdown();
         // Shut down hardware
         Bonnet.shutdown();
     }

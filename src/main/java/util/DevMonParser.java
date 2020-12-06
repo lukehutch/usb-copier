@@ -46,9 +46,11 @@ class DevMonParser implements Consumer<String> {
     private String label;
     private String isMounted;
     private String hasMedia;
+    private boolean isFirstLine = true;
 
-    private static final Pattern removedPattern = Pattern.compile("removed: (.*)");
-    private static final Pattern fieldPattern = Pattern.compile("(    )?(.*): *\\[(.*)\\]");
+    private static final Pattern mountedPattern = Pattern.compile("Mounted ([^ ]+) at (.+)");
+    private static final Pattern removedPattern = Pattern.compile("removed: (.+)");
+    private static final Pattern fieldPattern = Pattern.compile("(    )?(.+): *\\[(.*)\\]");
 
     // /etc/mtab escapes in octal(!) -- e.g. space is \040
     private static String unescapeOctal(String path) {
@@ -70,113 +72,135 @@ class DevMonParser implements Consumer<String> {
 
     @Override
     public void accept(String line) {
-        Matcher removedMatcher = removedPattern.matcher(line);
-        if (removedMatcher.matches()) {
-            // e.g.:
-            // removed:   /org/freedesktop/UDisks/devices/sdb1
+        if (isFirstLine) {
+            // Make sure all drives are mounted once devmon has started
+            DiskMonitor.mountAll();
+            isFirstLine = false;
+        }
+        // System.out.println("DEVMON LINE: " + line);
+        Matcher mountedMatcher = mountedPattern.matcher(line);
+        if (mountedMatcher.matches()) {
+            // On startup an automounted device that was not originally mounted will be listed with
+            // "ismounted: [0]", followed by a "Mounted" line, e.g.:
+            // Mounted /dev/sdc1 at /media/root/FREE DOS
 
             // N.B. uses a udisks device node -- need to convert to e.g. /dev/sdb1
-            String udevDevice = removedMatcher.group(1);
-            String partitionDevice = "/dev/" + udevDevice.substring(udevDevice.lastIndexOf("/") + 1);
+            String partitionDevice = mountedMatcher.group(1);
+            String mountPoint = mountedMatcher.group(2);
 
-            // Drive was unplugged
-            DiskMonitor.driveUnplugged(partitionDevice);
+            // Mark drive as mounted
+            DiskMonitor.driveMounted(partitionDevice, mountPoint, /* label = */ null);
 
         } else {
-            // e.g.:
-            // device: [/dev/sdb1]
-            //     systeminternal: [0]
-            //     usage:          [filesystem]
-            //     type:           [vfat]
-            //     label:          [FREEDOS]
-            //     ismounted:      [1]
-            //     nopolicy:       [0]
-            //     hasmedia:       [1]
-            //     opticaldisc:    []
-            //     numaudiotracks: []
-            //     blank:          []
-            //     media:          []
-            //     partition:      [1]
-            Matcher fieldMatcher = fieldPattern.matcher(line);
-            if (fieldMatcher.matches()) {
-                boolean isIndented = fieldMatcher.group(1) != null;
-                String key = fieldMatcher.group(2);
-                String val = fieldMatcher.group(3);
+            Matcher removedMatcher = removedPattern.matcher(line);
+            if (removedMatcher.matches()) {
+                // e.g.:
+                // removed:   /org/freedesktop/UDisks/devices/sdb1
 
-                // System.out.println(line);
-                if (!isIndented) {
-                    // First line is not indented
-                    if (key.equals("device")) {
-                        // Remember partition device for when the metadata lines are subsequently read
-                        partitionDevice = val;
-                        usage = null;
-                        label = null;
-                        isMounted = null;
-                        hasMedia = null;
-                    }
-                } else {
-                    // Collect vals from indented lines
-                    switch (key) {
-                    case "usage":
-                        usage = val;
-                        break;
-                    case "label":
-                        label = val;
-                        break;
-                    case "ismounted":
-                        isMounted = val;
-                        break;
-                    case "hasmedia":
-                        hasMedia = val;
-                        break;
-                    }
-                }
-                // When all indented fields are available
-                if (partitionDevice != null && usage != null && label != null && isMounted != null
-                        && hasMedia != null) {
-                    // If drive contains a filesystem
-                    if (usage.equals("filesystem")) {
-                        if (hasMedia.equals("1")) {
-                            if (isMounted.equals("1")) {
-                                // Drive is mounted, and all the metadata has been read.
-                                // Need to separately find the mountpoint in /etc/mtab, since the "Mount"
-                                // line is not present in the devmon output if device is plugged on startup.
-                                // https://github.com/IgnorantGuru/udevil/issues/99
-                                String mountPoint = null;
-                                try {
-                                    Optional<String> mtabLine = Files.readAllLines(Paths.get("/etc/mtab")).stream()
-                                            .filter(l -> l.startsWith(partitionDevice + " ")).findFirst();
-                                    if (mtabLine.isPresent()) {
-                                        // Unescape any octal-escaped mountpoint paths (drive names can contain
-                                        // spaces or other special chars, which are escaped as octal when
-                                        // used as part of a mountpoint name)
-                                        String[] parts = mtabLine.get().split(" ");
-                                        if (parts.length >= 2) {
-                                            mountPoint = unescapeOctal(parts[1]);
-                                        }
-                                    }
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                }
-                                if (mountPoint != null) {
-                                    // Drive is mounted
-                                    DiskMonitor.driveMounted(partitionDevice, mountPoint, label);
-                                } else {
-                                    System.out.println("Could not read /etc/mtab");
-                                }
-                            } else {
-                                // Drive is not mounted
-                                DiskMonitor.driveUnmounted(partitionDevice);
-                            }
-                        } else {
-                            // Drive is unplugged
-                            DiskMonitor.driveUnplugged(partitionDevice);
+                // N.B. uses a udisks device node -- need to convert to e.g. /dev/sdb1
+                String udevDevice = removedMatcher.group(1);
+                String partitionDevice = "/dev/" + udevDevice.substring(udevDevice.lastIndexOf("/") + 1);
+
+                // Drive was unplugged
+                DiskMonitor.driveUnplugged(partitionDevice);
+
+            } else {
+                // e.g.:
+                // device: [/dev/sdb1]
+                //     systeminternal: [0]
+                //     usage:          [filesystem]
+                //     type:           [vfat]
+                //     label:          [FREEDOS]
+                //     ismounted:      [1]
+                //     nopolicy:       [0]
+                //     hasmedia:       [1]
+                //     opticaldisc:    []
+                //     numaudiotracks: []
+                //     blank:          []
+                //     media:          []
+                //     partition:      [1]
+                Matcher fieldMatcher = fieldPattern.matcher(line);
+                if (fieldMatcher.matches()) {
+                    boolean isIndented = fieldMatcher.group(1) != null;
+                    String key = fieldMatcher.group(2);
+                    String val = fieldMatcher.group(3);
+
+                    // System.out.println(line);
+                    if (!isIndented) {
+                        // First line is not indented
+                        if (key.equals("device")) {
+                            // Remember partition device for when the metadata lines are subsequently read
+                            partitionDevice = val;
+                            usage = null;
+                            label = null;
+                            isMounted = null;
+                            hasMedia = null;
                         }
                     } else {
-                        // Non-filesystem? Not sure what this is for, or what values are valid. Mark as unplugged.
-                        DiskMonitor.driveUnplugged(partitionDevice);
+                        // Collect vals from indented lines
+                        switch (key) {
+                        case "usage":
+                            usage = val;
+                            break;
+                        case "label":
+                            label = val;
+                            break;
+                        case "ismounted":
+                            isMounted = val;
+                            break;
+                        case "hasmedia":
+                            hasMedia = val;
+                            break;
+                        }
                     }
-                    partitionDevice = null;
+                    // When all indented fields are available
+                    if (partitionDevice != null && usage != null && label != null && isMounted != null
+                            && hasMedia != null) {
+                        // If drive contains a filesystem
+                        if (usage.equals("filesystem")) {
+                            if (hasMedia.equals("1")) {
+                                if (isMounted.equals("1")) {
+                                    // Drive is mounted, and all the metadata has been read.
+                                    // Need to separately find the mountpoint in /etc/mtab, since the "Mount"
+                                    // line is not present in the devmon output if device is plugged on startup.
+                                    // https://github.com/IgnorantGuru/udevil/issues/99
+                                    String mountPoint = null;
+                                    try {
+                                        Optional<String> mtabLine = Files.readAllLines(Paths.get("/etc/mtab"))
+                                                .stream().filter(l -> l.startsWith(partitionDevice + " "))
+                                                .findFirst();
+                                        if (mtabLine.isPresent()) {
+                                            // Unescape any octal-escaped mountpoint paths (drive names can contain
+                                            // spaces or other special chars, which are escaped as octal when
+                                            // used as part of a mountpoint name)
+                                            String[] parts = mtabLine.get().split(" ");
+                                            if (parts.length >= 2) {
+                                                mountPoint = unescapeOctal(parts[1]);
+                                            }
+                                        }
+                                    } catch (IOException e) {
+                                        e.printStackTrace();
+                                    }
+                                    if (mountPoint != null) {
+                                        // Drive is mounted
+                                        DiskMonitor.driveMounted(partitionDevice, mountPoint, label);
+                                    } else {
+                                        System.out.println("Could not read /etc/mtab");
+                                    }
+                                } else {
+                                    // Drive is not mounted
+                                    DiskMonitor.driveUnmounted(partitionDevice);
+                                }
+                            } else {
+                                // Drive is unplugged
+                                DiskMonitor.driveUnplugged(partitionDevice);
+                            }
+                        } else {
+                            // Non-filesystem? Not sure what this is for, or what values are valid. Mark as unplugged.
+                            DiskMonitor.driveUnplugged(partitionDevice);
+                        }
+                        partitionDevice = null;
+                    }
                 }
             }
         }

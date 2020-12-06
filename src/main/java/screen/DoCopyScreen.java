@@ -228,11 +228,7 @@ public class DoCopyScreen extends Screen {
             driveInfo.clearListing();
 
             // Unmount so the drives can be pulled out without setting the dirty bit
-            try {
-                driveInfo.unmount();
-            } catch (InterruptedException | ExecutionException e) {
-                e.printStackTrace();
-            }
+            driveInfo.unmount();
         }
     }
 
