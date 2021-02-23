@@ -51,14 +51,14 @@ public class Msg {
     public static final Str NEEDED = new Str("Short", "부족", "不足");
 
     public static final Str ERROR = new Str("Error", "오류", "发生错误");
-    public static final Str CANCELED = new Str("Canceled", "취소 되었다", "取消了");
+    public static final Str CANCELED = new Str("Canceled", "최소 완료", "取消了");
     public static final Str CANCELING = new Str("Canceling", "취소중", "取消中");
     public static final Str COMPLETED = new Str("Completed", "성공적 완료", "成功完成");
 
     public static final Str SRC = new Str("Src", "원본", "复制源"); // Currently unused
     public static final Str DEST = new Str("Dest", "대상", "目标");
 
-    public static final Str READING = new Str("Reading #$0", "#$0 를 읽고있다", "从 #$0 读取");
+    public static final Str READING = new Str("Reading #$0", "#$0를 읽고있는중", "从 #$0 读取");
     public static final Str EMPTY = new Str("#$0 is empty", "#$0 는 비다", "#$0 是空的");
 
     public static final Str START_COPYING = new Str("Copy from #$0", "#$0 에서 복사 시작", "从 #$0 开始复制");
