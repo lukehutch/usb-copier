@@ -15,7 +15,8 @@ On the build machine:
 * `git clone https://github.com/lukehutch/Adafruit-OLED-Bonnet-Toolkit.git`
 * `cd Adafruit-OLED-Bonnet-Toolkit ; mvn install ; cd ..`
 * `git clone https://github.com/lukehutch/usb-copier.git`
-* Then copy `target/usb-copier-0.0.2-jar-with-dependencies.jar` to `/home/pi` on the Raspberry Pi.
+* `cd usb-copier ; mvn package ; cd ..`
+* Then copy `usb-copier/target/usb-copier-0.0.2-jar-with-dependencies.jar` to `/home/pi` on the Raspberry Pi.
 
 On the Raspberry Pi:
 
